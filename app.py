@@ -8,7 +8,7 @@ st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
-API_KEY = "TWÓJ_API_TOKEN" # Wklej tutaj swój token
+API_KEY = "TWÓJ_API_TOKEN" # Wklej tutaj swój token z football-data.org
 supabase: Client = create_client(url, key)
 
 if 'nick' not in st.session_state: st.session_state.nick = ''
@@ -19,13 +19,30 @@ def oblicz_punkty(typ_g, typ_go, real_g, real_go):
     elif (typ_g > typ_go and real_g > real_go) or (typ_g < typ_go and real_g < real_go) or (typ_g == typ_go and real_g == real_go): return 1
     return 0
 
+def recalculate_all_points():
+    # 1. Pobierz listę istniejących meczów
+    matches = supabase.table("mecze").select("id").execute().data
+    valid_match_ids = [m['id'] for m in matches]
+    
+    # 2. Pobierz wszystkich graczy
+    players = supabase.table("gracze").select("nick").execute().data
+    
+    for p in players:
+        # 3. Pobierz wszystkie typy gracza
+        typy = supabase.table("typy").select("punkty_za_mecz, mecz_id").eq("nick", p['nick']).execute().data
+        
+        # 4. Zsumuj tylko te, które są w valid_match_ids (czyli istnieją w bazie)
+        total = sum(t['punkty_za_mecz'] for t in typy if t['mecz_id'] in valid_match_ids and t['punkty_za_mecz'] is not None)
+        
+        # 5. Zaktualizuj gracza
+        supabase.table("gracze").update({"punkty": total}).eq("nick", p['nick']).execute()
+
 def sync_with_api():
-    # Pobranie danych z API (Football-Data.org)
+    # Pobranie danych z API
     url_api = "https://api.football-data.org/v4/competitions/WC/matches"
     headers = {"X-Auth-Token": API_KEY}
     response = requests.get(url_api, headers=headers).json()
     
-    # Przetworzenie danych
     for match in response['matches']:
         gosp = match['homeTeam']['name']
         gosc = match['awayTeam']['name']
@@ -34,7 +51,6 @@ def sync_with_api():
         g_g = match['score']['fullTime']['home']
         g_go = match['score']['fullTime']['away']
         
-        # Zapisujemy do bazy
         supabase.table("mecze").upsert({
             "gospodarze": gosp,
             "goscie": gosc,
@@ -117,10 +133,16 @@ else:
 
     elif wybor == "⚙️ Panel Admina":
         st.subheader("Zarządzanie")
+        
         if st.button("🔄 POBIERZ MECZE Z API"):
             with st.spinner("Synchronizacja..."):
                 sync_with_api()
                 st.success("Zsynchronizowano!")
+        
+        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW (Usuwa widma)"):
+            with st.spinner("Przeliczanie..."):
+                recalculate_all_points()
+                st.success("Punkty przeliczone na nowo!")
         
         st.markdown("### Rozlicz ręcznie")
         mecze_do = supabase.table("mecze").select("*").neq("status", "FT").execute().data
@@ -136,8 +158,5 @@ else:
                 for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
                     pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
                     supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
-                for gracz in supabase.table("gracze").select("nick").execute().data:
-                    typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data
-                    suma = sum([t['punkty_za_mecz'] for t in typy if t['punkty_za_mecz'] is not None])
-                    supabase.table("gracze").update({"punkty": suma}).eq("nick", gracz['nick']).execute()
+                recalculate_all_points() # Po rozliczeniu meczu też naprawiamy tabelę
                 st.rerun()
