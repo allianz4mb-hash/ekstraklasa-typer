@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
+# Ustawienia strony
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
 url = st.secrets["SUPABASE_URL"]
@@ -51,7 +52,7 @@ else:
 
     st.title("⚽ Typer Mundialu")
     
-    # Niestandardowe menu zamiast tabs - to jest rozwiązanie Twojego problemu
+    # Nawigacja - radio buttony są najbardziej stabilne w Streamlit
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI:
         opcje.append("⚙️ Panel Admina")
@@ -59,7 +60,7 @@ else:
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
-    # Logika wyświetlania w zależności od wyboru
+    # LOGIKA ZAKŁADEK
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
         mecze = supabase.table("mecze").select("*").order("id").execute().data
@@ -95,25 +96,26 @@ else:
             n_g = c1.text_input("Gospodarze")
             n_go = c2.text_input("Goście")
             if st.button("Dodaj"):
-                supabase.table("mecze").insert({"gospodarze": n_g, "goscie": n_go, "status": "NS"}).execute()
-                st.rerun()
+                if n_g and n_go:
+                    supabase.table("mecze").insert({
+                        "gospodarze": n_g, "goscie": n_go, "status": "NS", 
+                        "data_meczu": "2026-07-08T20:00:00+00:00", "kolejka": 1,
+                        "gole_gospodarze": None, "gole_goscie": None
+                    }).execute()
+                    st.rerun()
         
         st.markdown("### 🏁 Rozlicz mecz")
         mecze_do = supabase.table("mecze").select("*").neq("status", "FT").execute().data
         if mecze_do:
-            opcje_m = {f"{m['gospodarze']} vs {m['goscie']}": m for m in mecze_do}
+            opcje_m = {f"{m['gospodarze']} vs {m['goscie']} (ID: {m['id']})": m for m in mecze_do}
             sel = st.selectbox("Wybierz mecz:", list(opcje_m.keys()))
             m = opcje_m[sel]
             c1, c2 = st.columns(2)
-            r_g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, key="r_g")
-            r_go = c2.number_input(f"Gole {m['goscie']}", 0, 10, key="r_go")
-            if st.button("Rozlicz"):
+            r_g = c1.number_input(f"Wynik {m['gospodarze']}", 0, 10, key="r_g")
+            r_go = c2.number_input(f"Wynik {m['goscie']}", 0, 10, key="r_go")
+            if st.button("Zakończ i podlicz"):
                 supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
                 for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
                     pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
                     supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
-                # Przelicz punkty
-                for gracz in supabase.table("gracze").select("nick").execute().data:
-                    suma = sum([t['punkty_za_mecz'] for t in supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data if t['punkty_za_mecz']])
-                    supabase.table("gracze").update({"punkty": suma}).eq("nick", gracz['nick']).execute()
-                st.rerun()
+                for gracz in supabase.table("gracze").select("nick").
