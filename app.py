@@ -109,17 +109,17 @@ else:
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
-if wybor == "🎯 Typer":
+    if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
-        # Pobieramy mecze i sortujemy je
-        mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
+        # Pobieramy wszystkie mecze
+        all_mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
         
-        # Dzielimy mecze na aktywne i zakończone
-        aktywne = [m for m in mecze if m['status'] != 'FT']
-        zakonczone = [m for m in mecze if m['status'] == 'FT']
+        # Dzielimy na aktywne i zakończone
+        aktywne = [m for m in all_mecze if m['status'] != 'FT']
+        zakonczone = [m for m in all_mecze if m['status'] == 'FT']
 
-        # 1. WYŚWIETLANIE MECZÓW DO OBSTAWIENIA
+        # 1. MECZE AKTYWNE
         if aktywne:
             for m in aktywne:
                 mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
@@ -140,11 +140,11 @@ if wybor == "🎯 Typer":
                     st.rerun()
                 st.markdown("---")
         else:
-            st.info("Brak nadchodzących meczów do obstawienia.")
+            st.info("Brak aktywnych meczów.")
 
-        # 2. WYŚWIETLANIE ZAKOŃCZONYCH W EXPANDERZE
+        # 2. MECZE ZAKOŃCZONE (W EXPANDERZE)
         if zakonczone:
-            with st.expander("Zobacz zakończone mecze"):
+            with st.expander("🏁 Zobacz zakończone mecze"):
                 for m in zakonczone:
                     st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}**")
 
@@ -162,8 +162,8 @@ if wybor == "🎯 Typer":
         if st.button("🔄 POBIERZ MECZE Z API"):
             with st.spinner("Synchronizacja..."):
                 sync_with_api()
+                st.rerun()
         
-        # Tutaj była linijka z błędem - naprawiona:
         if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW (Usuwa widma)"):
             with st.spinner("Przeliczanie..."):
                 recalculate_all_points()
