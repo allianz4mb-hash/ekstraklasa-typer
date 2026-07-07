@@ -6,9 +6,11 @@ from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
+# Konfiguracja
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
-API_KEY = "TWÓJ_API_TOKEN" # Wklej tutaj swój token z football-data.org
+# Poprawiona nazwa klucza zgodnie z Twoim secrets.toml
+API_KEY = st.secrets["FOOTBALL_API_KEY"] 
 supabase: Client = create_client(url, key)
 
 if 'nick' not in st.session_state: st.session_state.nick = ''
@@ -20,46 +22,49 @@ def oblicz_punkty(typ_g, typ_go, real_g, real_go):
     return 0
 
 def recalculate_all_points():
-    # 1. Pobierz listę istniejących meczów
     matches = supabase.table("mecze").select("id").execute().data
     valid_match_ids = [m['id'] for m in matches]
-    
-    # 2. Pobierz wszystkich graczy
     players = supabase.table("gracze").select("nick").execute().data
-    
     for p in players:
-        # 3. Pobierz wszystkie typy gracza
         typy = supabase.table("typy").select("punkty_za_mecz, mecz_id").eq("nick", p['nick']).execute().data
-        
-        # 4. Zsumuj tylko te, które są w valid_match_ids (czyli istnieją w bazie)
         total = sum(t['punkty_za_mecz'] for t in typy if t['mecz_id'] in valid_match_ids and t['punkty_za_mecz'] is not None)
-        
-        # 5. Zaktualizuj gracza
         supabase.table("gracze").update({"punkty": total}).eq("nick", p['nick']).execute()
 
 def sync_with_api():
-    # Pobranie danych z API
     url_api = "https://api.football-data.org/v4/competitions/WC/matches"
     headers = {"X-Auth-Token": API_KEY}
-    response = requests.get(url_api, headers=headers).json()
     
-    for match in response['matches']:
-        gosp = match['homeTeam']['name']
-        gosc = match['awayTeam']['name']
-        data = match['utcDate']
-        status = 'FT' if match['status'] == 'FINISHED' else 'NS'
-        g_g = match['score']['fullTime']['home']
-        g_go = match['score']['fullTime']['away']
+    try:
+        resp = requests.get(url_api, headers=headers)
+        if resp.status_code != 200:
+            st.error(f"Błąd API (Kod {resp.status_code}): {resp.text}")
+            return
         
-        supabase.table("mecze").upsert({
-            "gospodarze": gosp,
-            "goscie": gosc,
-            "data_meczu": data,
-            "status": status,
-            "gole_gospodarze": g_g,
-            "gole_goscie": g_go,
-            "kolejka": 1
-        }).execute()
+        data = resp.json()
+        if 'matches' not in data:
+            st.error(f"API nie zwróciło meczów! Klucze w odpowiedzi: {list(data.keys())}")
+            return
+            
+        for match in data['matches']:
+            gosp = match['homeTeam']['name']
+            gosc = match['awayTeam']['name']
+            data_str = match['utcDate']
+            status = 'FT' if match['status'] == 'FINISHED' else 'NS'
+            g_g = match['score']['fullTime']['home']
+            g_go = match['score']['fullTime']['away']
+            
+            supabase.table("mecze").upsert({
+                "gospodarze": gosp,
+                "goscie": gosc,
+                "data_meczu": data_str,
+                "status": status,
+                "gole_gospodarze": g_g,
+                "gole_goscie": g_go,
+                "kolejka": 1
+            }).execute()
+        st.success("Zsynchronizowano pomyślnie!")
+    except Exception as e:
+        st.error(f"Wystąpił błąd podczas łączenia z API: {e}")
 
 # --- LOGOWANIE ---
 if st.session_state.nick == '':
@@ -93,7 +98,6 @@ else:
             st.rerun()
 
     st.title("⚽ Typer Mundialu")
-    
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI: opcje.append("⚙️ Panel Admina")
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
@@ -133,30 +137,9 @@ else:
 
     elif wybor == "⚙️ Panel Admina":
         st.subheader("Zarządzanie")
-        
         if st.button("🔄 POBIERZ MECZE Z API"):
             with st.spinner("Synchronizacja..."):
                 sync_with_api()
-                st.success("Zsynchronizowano!")
-        
-        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW (Usuwa widma)"):
-            with st.spinner("Przeliczanie..."):
-                recalculate_all_points()
-                st.success("Punkty przeliczone na nowo!")
-        
-        st.markdown("### Rozlicz ręcznie")
-        mecze_do = supabase.table("mecze").select("*").neq("status", "FT").execute().data
-        if mecze_do:
-            opcje_m = {f"{m['gospodarze']} vs {m['goscie']}": m for m in mecze_do}
-            sel = st.selectbox("Wybierz mecz:", list(opcje_m.keys()))
-            m = opcje_m[sel]
-            c1, c2 = st.columns(2)
-            r_g = c1.number_input("Gole Gosp", 0, 10)
-            r_go = c2.number_input("Gole Gość", 0, 10)
-            if st.button("Zakończ i podlicz"):
-                supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
-                for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
-                    pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
-                    supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
-                recalculate_all_points() # Po rozliczeniu meczu też naprawiamy tabelę
                 st.rerun()
+        
+        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓ
