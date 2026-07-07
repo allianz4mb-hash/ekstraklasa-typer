@@ -87,7 +87,10 @@ def sync_with_api():
                 supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
             else:
                 supabase.table("mecze").insert(dane_meczu).execute()
-        st.success(f"Zsynchronizowano {len(matches)} meczów!")
+        
+        # Automatyczne przeliczenie po synchronizacji
+        recalculate_all_points()
+        st.success(f"Zsynchronizowano {len(matches)} meczów i przeliczono punkty!")
     except Exception as e:
         st.error(f"Błąd: {e}")
 
@@ -223,10 +226,7 @@ else:
 
     elif wybor == "⚙️ Panel Admina":
         st.subheader("Zarządzanie")
-        if st.button("🔄 POBIERZ MECZE Z API"):
+        if st.button("🔄 POBIERZ MECZE I PRZELICZ PUNKTY"):
             with st.spinner("Synchronizacja..."):
                 sync_with_api()
                 st.rerun()
-        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW"):
-            recalculate_all_points()
-            st.success("Punkty przeliczone!")
