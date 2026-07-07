@@ -2,7 +2,6 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
-# Ustawienia strony
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
 url = st.secrets["SUPABASE_URL"]
@@ -52,7 +51,6 @@ else:
 
     st.title("⚽ Typer Mundialu")
     
-    # Nawigacja - radio buttony są najbardziej stabilne w Streamlit
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI:
         opcje.append("⚙️ Panel Admina")
@@ -60,7 +58,6 @@ else:
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
-    # LOGIKA ZAKŁADEK
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
         mecze = supabase.table("mecze").select("*").order("id").execute().data
@@ -111,11 +108,17 @@ else:
             sel = st.selectbox("Wybierz mecz:", list(opcje_m.keys()))
             m = opcje_m[sel]
             c1, c2 = st.columns(2)
-            r_g = c1.number_input(f"Wynik {m['gospodarze']}", 0, 10, key="r_g")
-            r_go = c2.number_input(f"Wynik {m['goscie']}", 0, 10, key="r_go")
+            r_g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, key="r_g")
+            r_go = c2.number_input(f"Gole {m['goscie']}", 0, 10, key="r_go")
             if st.button("Zakończ i podlicz"):
                 supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
                 for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
                     pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
                     supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
-                for gracz in supabase.table("gracze").select("nick").
+                
+                for gracz in supabase.table("gracze").select("nick").execute().data:
+                    typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data
+                    suma = sum([t['punkty_za_mecz'] for t in typy if t['punkty_za_mecz'] is not None])
+                    supabase.table("gracze").update({"punkty": suma}).eq("nick", gracz['nick']).execute()
+                st.success("Rozliczono!")
+                st.rerun()
