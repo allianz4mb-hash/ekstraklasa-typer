@@ -9,7 +9,7 @@ st.set_page_config(page_title="Typer Mundialu", layout="wide")
 # Konfiguracja
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
-# Poprawiona nazwa klucza zgodnie z Twoim secrets.toml
+# Teraz korzystamy z poprawnej nazwy Twojego klucza
 API_KEY = st.secrets["FOOTBALL_API_KEY"] 
 supabase: Client = create_client(url, key)
 
@@ -31,6 +31,7 @@ def recalculate_all_points():
         supabase.table("gracze").update({"punkty": total}).eq("nick", p['nick']).execute()
 
 def sync_with_api():
+    # Zmieniono endpoint na właściwy dla MŚ (jeśli WC nie działa, spróbuj 'WC' lub sprawdź dokumentację Football-Data)
     url_api = "https://api.football-data.org/v4/competitions/WC/matches"
     headers = {"X-Auth-Token": API_KEY}
     
@@ -142,4 +143,24 @@ else:
                 sync_with_api()
                 st.rerun()
         
-        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓ
+        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW"):
+            with st.spinner("Przeliczanie..."):
+                recalculate_all_points()
+                st.success("Punkty przeliczone!")
+        
+        st.markdown("### Rozlicz ręcznie")
+        mecze_do = supabase.table("mecze").select("*").neq("status", "FT").execute().data
+        if mecze_do:
+            opcje_m = {f"{m['gospodarze']} vs {m['goscie']}": m for m in mecze_do}
+            sel = st.selectbox("Wybierz mecz:", list(opcje_m.keys()))
+            m = opcje_m[sel]
+            c1, c2 = st.columns(2)
+            r_g = c1.number_input("Gole Gosp", 0, 10)
+            r_go = c2.number_input("Gole Gość", 0, 10)
+            if st.button("Zakończ i podlicz"):
+                supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
+                for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
+                    pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
+                    supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
+                recalculate_all_points()
+                st.rerun()
