@@ -43,7 +43,7 @@ else:
     if st.button("Pobierz najbliższą kolejkę z API"):
         with st.spinner("Pobieranie meczów..."):
             url_api = "https://v3.football.api-sports.io/fixtures"
-            querystring = {"league": "106", "season": "2026", "next": "9"} 
+            querystring = {"league": "106", "season": "2024", "next": "9"} 
             headers = {
                 "x-apisports-key": api_key
             }
