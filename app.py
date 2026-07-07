@@ -9,7 +9,6 @@ st.set_page_config(page_title="Typer Mundialu", layout="wide")
 # Konfiguracja
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
-# Teraz korzystamy z poprawnej nazwy Twojego klucza
 API_KEY = st.secrets["FOOTBALL_API_KEY"] 
 supabase: Client = create_client(url, key)
 
@@ -31,22 +30,27 @@ def recalculate_all_points():
         supabase.table("gracze").update({"punkty": total}).eq("nick", p['nick']).execute()
 
 def sync_with_api():
-    # Zmieniono endpoint na właściwy dla MŚ (jeśli WC nie działa, spróbuj 'WC' lub sprawdź dokumentację Football-Data)
     url_api = "https://api.football-data.org/v4/competitions/WC/matches"
     headers = {"X-Auth-Token": API_KEY}
     
+    st.write("DEBUG: Łączę się z API...")
     try:
         resp = requests.get(url_api, headers=headers)
+        st.write(f"DEBUG: Status HTTP: {resp.status_code}")
+        
         if resp.status_code != 200:
-            st.error(f"Błąd API (Kod {resp.status_code}): {resp.text}")
+            st.error(f"Błąd API: {resp.text}")
             return
         
         data = resp.json()
         if 'matches' not in data:
-            st.error(f"API nie zwróciło meczów! Klucze w odpowiedzi: {list(data.keys())}")
+            st.error(f"Błąd: Klucz 'matches' nie istnieje w odpowiedzi. Odpowiedź: {data}")
             return
-            
-        for match in data['matches']:
+        
+        matches = data['matches']
+        st.write(f"DEBUG: Znaleziono {len(matches)} meczów w API.")
+        
+        for match in matches:
             gosp = match['homeTeam']['name']
             gosc = match['awayTeam']['name']
             data_str = match['utcDate']
@@ -65,7 +69,7 @@ def sync_with_api():
             }).execute()
         st.success("Zsynchronizowano pomyślnie!")
     except Exception as e:
-        st.error(f"Wystąpił błąd podczas łączenia z API: {e}")
+        st.error(f"Wystąpił błąd: {e}")
 
 # --- LOGOWANIE ---
 if st.session_state.nick == '':
@@ -141,7 +145,6 @@ else:
         if st.button("🔄 POBIERZ MECZE Z API"):
             with st.spinner("Synchronizacja..."):
                 sync_with_api()
-                st.rerun()
         
         if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW"):
             with st.spinner("Przeliczanie..."):
