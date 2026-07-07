@@ -48,13 +48,12 @@ else:
         gosp = st.text_input("Gospodarze")
         gosc = st.text_input("Goście")
         if st.button("Dodaj mecz"):
+            # Usuwamy id, niech baza zajmie się tym automatycznie
             supabase.table("mecze").insert({
                 "gospodarze": gosp,
                 "goscie": gosc,
                 "status": "NS",
-                "data_meczu": "2026-07-07T20:00:00+00:00"
+                "data_meczu": "2026-07-07T20:00:00+00:00",
+                "kolejka": 1
             }).execute()
             st.success("Dodano mecz!")
-        if st.button("Wyloguj"):
-            st.session_state.nick = ''
-            st.rerun()
