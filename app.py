@@ -152,19 +152,16 @@ else:
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
                 
                 # HTML z logo
-                st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                    <img src="{m['logo_gospodarze']}" width="30">
-                    <span style="font-size: 18px;"><strong>{m['gospodarze']} vs {m['goscie']}</strong></span>
-                    <img src="{m['logo_goscie']}" width="30">
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">'
+                            f'<img src="{m["logo_gospodarze"]}" width="30">'
+                            f'<span style="font-size: 18px;"><strong>{m["gospodarze"]} vs {m["goscie"]}</strong></span>'
+                            f'<img src="{m["logo_goscie"]}" width="30">'
+                            f'</div>', unsafe_allow_html=True)
                 
                 st.write(f"📅 Start (PL): {pl_time.strftime('%d.%m, %H:%M')}")
                 
                 time_diff = lock_time - now
                 if not is_locked:
-                    # Odliczanie tylko jeśli zostało mniej niż 24h
                     if time_diff <= timedelta(hours=24) and time_diff > timedelta(0):
                         total_seconds = int(time_diff.total_seconds())
                         hours = total_seconds // 3600
@@ -198,6 +195,38 @@ else:
         if zakonczone:
             with st.expander("🏁 Zobacz zakończone mecze"):
                 for m in zakonczone:
-                    st.markdown(f"""
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                        <img src="{m['logo_gospodarze']}" width="20
+                    st.markdown(f'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">'
+                                f'<img src="{m["logo_gospodarze"]}" width="20">'
+                                f'<span>{m["gospodarze"]} {m["gole_gospodarze"]} : {m["gole_goscie"]} {m["goscie"]}</span>'
+                                f'<img src="{m["logo_goscie"]}" width="20">'
+                                f'</div>', unsafe_allow_html=True)
+
+    elif wybor == "🏆 Ranking":
+        st.subheader("🏆 Podium Typerów")
+        gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
+        ranking_data = []
+        for g in gracze:
+            typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
+            punkty_1x2 = sum(1 for t in typy if t.get('punkty_za_mecz') == 1)
+            punkty_dokladne = sum(1 for t in typy if t.get('punkty_za_mecz') == 3)
+            ranking_data.append({"Gracz": g['nick'], "Punkty": g['punkty'], "Trafione 1X2": punkty_1x2, "Trafione dokładne": punkty_dokladne})
+        
+        if len(ranking_data) >= 3:
+            col1, col2, col3 = st.columns(3)
+            col1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
+            col2.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
+            col3.metric("3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punkty']} pkt")
+        
+        st.markdown("---")
+        st.subheader("Pełna tabela")
+        st.table(pd.DataFrame(ranking_data))
+
+    elif wybor == "⚙️ Panel Admina":
+        st.subheader("Zarządzanie")
+        if st.button("🔄 POBIERZ MECZE Z API"):
+            with st.spinner("Synchronizacja..."):
+                sync_with_api()
+                st.rerun()
+        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW"):
+            recalculate_all_points()
+            st.success("Punkty przeliczone!")
