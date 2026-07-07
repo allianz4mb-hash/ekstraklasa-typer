@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
+from datetime import datetime, timedelta, timezone
 
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
@@ -58,63 +59,73 @@ else:
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
+    # --- ZAKŁADKA TYPER ---
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
         mecze = supabase.table("mecze").select("*").order("id").execute().data
+        now = datetime.now(timezone.utc)
+        
         for m in mecze:
+            mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
+            is_locked = now >= (mecz_time - timedelta(minutes=5))
+            
             stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
+            
             if m['status'] == 'FT':
                 st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}**")
             else:
-                st.write(f"⏳ **{m['gospodarze']}** vs **{m['goscie']}**")
+                status_tekst = "🔒 Zablokowane" if is_locked else "⏳ Otwarta"
+                st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start: {mecz_time.strftime('%H:%M')} | Status: {status_tekst}")
+                
                 col1, col2 = st.columns(2)
                 def_g = stary_typ[0]['typ_gospodarze'] if stary_typ else 0
                 def_go = stary_typ[0]['typ_goscie'] if stary_typ else 0
-                g = col1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(def_g), key=f"g_{m['id']}")
-                go = col2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(def_go), key=f"go_{m['id']}")
-                if st.button("Zapisz typ", key=f"btn_{m['id']}"):
-                    dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
-                    if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
-                    else: supabase.table("typy").insert(dane).execute()
-                    st.rerun()
+                
+                g = col1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(def_g), key=f"g_{m['id']}", disabled=is_locked)
+                go = col2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(def_go), key=f"go_{m['id']}", disabled=is_locked)
+                
+                if not is_locked:
+                    if st.button("Zapisz typ", key=f"btn_{m['id']}"):
+                        dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
+                        if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
+                        else: supabase.table("typy").insert(dane).execute()
+                        st.rerun()
 
+    # --- ZAKŁADKA RANKING ---
     elif wybor == "🏆 Ranking":
         st.subheader("Tabela Typerów")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
-        
         ranking_data = []
         for g in gracze:
             typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
             count_3 = sum(1 for t in typy if t['punkty_za_mecz'] == 3)
             count_1 = sum(1 for t in typy if t['punkty_za_mecz'] == 1)
-            
             ranking_data.append({
-                "Gracz": g['nick'],
-                "Punkty": g['punkty'],
-                "Dokładne (3 pkt)": count_3,
-                "Trafione (1 pkt)": count_1,
-                "Liczba typów": len(typy)
+                "Gracz": g['nick'], "Punkty": g['punkty'],
+                "Dokładne (3 pkt)": count_3, "Trafione (1 pkt)": count_1
             })
-            
-        if ranking_data:
-            df = pd.DataFrame(ranking_data)
-            st.table(df)
+        if ranking_data: st.table(pd.DataFrame(ranking_data))
 
+    # --- ZAKŁADKA ADMIN ---
     elif wybor == "⚙️ Panel Admina":
         st.subheader("Zarządzanie Grą")
-        with st.expander("➕ Dodaj mecz"):
-            c1, c2 = st.columns(2)
-            n_g = c1.text_input("Gospodarze")
-            n_go = c2.text_input("Goście")
-            if st.button("Dodaj"):
-                if n_g and n_go:
-                    supabase.table("mecze").insert({
-                        "gospodarze": n_g, "goscie": n_go, "status": "NS", 
-                        "data_meczu": "2026-07-08T20:00:00+00:00", "kolejka": 1,
-                        "gole_gospodarze": None, "gole_goscie": None
-                    }).execute()
-                    st.rerun()
         
+        # BULK IMPORT
+        with st.expander("➕ Masowe dodawanie meczów (CSV)"):
+            st.write("Wklej mecze w formacie: `Gospodarz;Gość;YYYY-MM-DD HH:MM` (każdy w nowej linii)")
+            text_data = st.text_area("Lista meczów:")
+            if st.button("Dodaj listę"):
+                for line in text_data.split('\n'):
+                    if ';' in line:
+                        g, go, czas = line.split(';')
+                        supabase.table("mecze").insert({
+                            "gospodarze": g, "goscie": go, "status": "NS",
+                            "data_meczu": czas.replace(' ', 'T') + ":00+00:00",
+                            "kolejka": 1, "gole_gospodarze": None, "gole_goscie": None
+                        }).execute()
+                st.success("Dodano!")
+                st.rerun()
+
         st.markdown("### 🏁 Rozlicz mecz")
         mecze_do = supabase.table("mecze").select("*").neq("status", "FT").execute().data
         if mecze_do:
@@ -129,10 +140,8 @@ else:
                 for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
                     pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
                     supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
-                
                 for gracz in supabase.table("gracze").select("nick").execute().data:
                     typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data
                     suma = sum([t['punkty_za_mecz'] for t in typy if t['punkty_za_mecz'] is not None])
                     supabase.table("gracze").update({"punkty": suma}).eq("nick", gracz['nick']).execute()
-                st.success("Rozliczono!")
                 st.rerun()
