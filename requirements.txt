@@ -2,3 +2,4 @@ streamlit
 supabase
 requests
 beautifulsoup4
+bcrypt
