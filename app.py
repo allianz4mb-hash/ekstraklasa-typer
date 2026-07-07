@@ -109,28 +109,44 @@ else:
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
-    if wybor == "🎯 Typer":
+if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
+        # Pobieramy mecze i sortujemy je
         mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
-        for m in mecze:
-            mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
-            is_locked = now >= (mecz_time - timedelta(minutes=5))
-            stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
-            
-            if m['status'] == 'FT':
-                st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}**")
-            else:
+        
+        # Dzielimy mecze na aktywne i zakończone
+        aktywne = [m for m in mecze if m['status'] != 'FT']
+        zakonczone = [m for m in mecze if m['status'] == 'FT']
+
+        # 1. WYŚWIETLANIE MECZÓW DO OBSTAWIENIA
+        if aktywne:
+            for m in aktywne:
+                mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
+                is_locked = now >= (mecz_time - timedelta(minutes=5))
+                stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
+                
                 status_tekst = "🔒 Zablokowane" if is_locked else "⏳ Otwarta"
-                st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start: {mecz_time.strftime('%H:%M')} | Status: {status_tekst}")
+                st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start: {mecz_time.strftime('%H:%M')} | {status_tekst}")
+                
                 c1, c2 = st.columns(2)
                 g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(stary_typ[0]['typ_gospodarze']) if stary_typ else 0, key=f"g_{m['id']}", disabled=is_locked)
                 go = c2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(stary_typ[0]['typ_goscie']) if stary_typ else 0, key=f"go_{m['id']}", disabled=is_locked)
+                
                 if not is_locked and st.button("Zapisz typ", key=f"btn_{m['id']}"):
                     dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
                     if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
                     else: supabase.table("typy").insert(dane).execute()
                     st.rerun()
+                st.markdown("---")
+        else:
+            st.info("Brak nadchodzących meczów do obstawienia.")
+
+        # 2. WYŚWIETLANIE ZAKOŃCZONYCH W EXPANDERZE
+        if zakonczone:
+            with st.expander("Zobacz zakończone mecze"):
+                for m in zakonczone:
+                    st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}**")
 
     elif wybor == "🏆 Ranking":
         st.subheader("Ranking")
