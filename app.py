@@ -86,15 +86,24 @@ else:
                 go = col2.number_input(f"Gole: {m['goscie']}", 0, 10, value=int(def_go), key=f"go_{m['id']}")
                 
                 if st.button("Zapisz mój typ", key=f"btn_{m['id']}"):
-                    supabase.table("typy").upsert({
+                    dane_typu = {
                         "nick": st.session_state.nick,
                         "mecz_id": m['id'],
                         "typ_gospodarze": g,
                         "typ_goscie": go,
                         "rozliczony": False
-                    }).execute()
-                    st.success("Typ zapisany!")
-                    st.rerun()
+                    }
+                    try:
+                        if stary_typ:
+                            # Jeśli gracz już obstawił, aktualizujemy jego rekord używając ID z bazy
+                            supabase.table("typy").update(dane_typu).eq("id", stary_typ[0]['id']).execute()
+                        else:
+                            # Jeśli to pierwszy raz, dodajemy nowy wiersz
+                            supabase.table("typy").insert(dane_typu).execute()
+                        st.success("Typ zapisany!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Błąd zapisu w bazie: {e}")
 
     with tab2:
         st.subheader("Tabela Typerów")
@@ -142,4 +151,40 @@ else:
             mecz_obj = opcje_meczow[wybrany_mecz_str]
             
             col1, col2 = st.columns(2)
-            res
+            res_g = col1.number_input(f"Wynik końcowy: {mecz_obj['gospodarze']}", 0, 10, key="res_g")
+            res_go = col2.number_input(f"Wynik końcowy: {mecz_obj['goscie']}", 0, 10, key="res_go")
+            
+            if st.button("Zakończ mecz i podlicz punkty"):
+                try:
+                    supabase.table("mecze").update({
+                        "gole_gospodarze": res_g,
+                        "gole_goscie": res_go,
+                        "status": "FT"
+                    }).eq("id", mecz_obj['id']).execute()
+                    
+                    wszystkie_typy = supabase.table("typy").select("*").eq("mecz_id", mecz_obj['id']).execute().data
+                    
+                    for t in wszystkie_typy:
+                        pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], res_g, res_go)
+                        supabase.table("typy").update({
+                            "punkty_za_mecz": pts,
+                            "rozliczony": True
+                        }).eq("id", t['id']).execute()
+                    
+                    wszyscy_gracze = supabase.table("gracze").select("nick").execute().data
+                    for gracz in wszyscy_gracze:
+                        typy_gracza = supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data
+                        suma_punktow = sum([item['punkty_za_mecz'] for item in typy_gracza if item['punkty_za_mecz'] is not None])
+                        supabase.table("gracze").update({"punkty": suma_punktow}).eq("nick", gracz['nick']).execute()
+                        
+                    st.success("Mecz rozliczony! Punkty zostały dodane, a ranking zaktualizowany.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Błąd podczas rozliczania: {e}")
+        else:
+            st.info("Wszystkie mecze w bazie są już rozliczone.")
+        
+        st.write("---")
+        if st.button("Wyloguj się"):
+            st.session_state.nick = ''
+            st.rerun()
