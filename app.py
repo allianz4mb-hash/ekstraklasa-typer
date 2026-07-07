@@ -136,20 +136,29 @@ else:
 
         if aktywne:
             for m in aktywne:
-                # Czas bazowy (UTC)
                 mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
-                # Czas do blokady (używamy UTC do logicznej blokady, żeby było spójne)
                 is_locked = now >= (mecz_time - timedelta(minutes=5))
-                # Czas dla Polski do wyświetlenia
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
                 
+                # Logika odliczania
+                time_diff = mecz_time - now
+                if not is_locked and time_diff > timedelta(0):
+                    hours = time_diff.seconds // 3600
+                    minutes = (time_diff.seconds // 60) % 60
+                    countdown_str = f"⏳ Do startu: {hours}h {minutes}m"
+                    if hours == 0 and minutes < 30:
+                        st.warning(countdown_str)
+                    else:
+                        st.write(countdown_str)
+                elif is_locked:
+                    st.error("🔒 Zablokowane")
+                
+                st.write(f"### **{m['gospodarze']} vs {m['goscie']}**")
+                st.write(f"📅 Start: {pl_time.strftime('%d.%m, %H:%M')}")
+                
                 stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
-                
-                status_tekst = "🔒 Zablokowane" if is_locked else "⏳ Otwarta"
-                st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start (PL): {pl_time.strftime('%H:%M')} | {status_tekst}")
-                
                 if stary_typ:
-                    st.success(f"✅ Twój zapisany typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
+                    st.success(f"✅ Twój typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
                     btn_text = "Zaktualizuj typ"
                 else:
                     btn_text = "Zapisz typ"
@@ -185,7 +194,6 @@ else:
                 "Trafione dokładne": punkty_dokladne
             })
         
-        # LOGIKA PODIUM
         if len(ranking_data) >= 3:
             col1, col2, col3 = st.columns(3)
             col1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
