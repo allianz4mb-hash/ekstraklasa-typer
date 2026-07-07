@@ -43,17 +43,22 @@ else:
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
         st.table(gracze)
 
-    with tab3:
+  with tab3:
         st.subheader("Panel Admina")
         gosp = st.text_input("Gospodarze")
         gosc = st.text_input("Goście")
         if st.button("Dodaj mecz"):
-            # Usuwamy id, niech baza zajmie się tym automatycznie
-            supabase.table("mecze").insert({
+            nowy_mecz = {
                 "gospodarze": gosp,
                 "goscie": gosc,
                 "status": "NS",
-                "data_meczu": "2026-07-07T20:00:00+00:00",
-                "kolejka": 1
-            }).execute()
-            st.success("Dodano mecz!")
+                "data_meczu": "2026-07-08T20:00:00+00:00",
+                "kolejka": 1,
+                "gole_gospodarze": None, # Jawnie ustawiamy na puste
+                "gole_goscie": None      # Jawnie ustawiamy na puste
+            }
+            try:
+                supabase.table("mecze").insert(nowy_mecz).execute()
+                st.success("Dodano mecz!")
+            except Exception as e:
+                st.error(f"Błąd bazy: {e}")
