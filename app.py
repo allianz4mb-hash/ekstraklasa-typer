@@ -78,12 +78,29 @@ else:
                     else: supabase.table("typy").insert(dane).execute()
                     st.rerun()
 
-    elif wybor == "🏆 Ranking":
+elif wybor == "🏆 Ranking":
         st.subheader("Tabela Typerów")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
-        if gracze:
-            df = pd.DataFrame(gracze)
-            df.columns = ["Gracz", "Suma Punktów"]
+        
+        ranking_data = []
+        for g in gracze:
+            # Pobieramy typy danego gracza, aby wyliczyć statystyki
+            typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
+            
+            # Liczymy statystyki
+            count_3 = sum(1 for t in typy if t['punkty_za_mecz'] == 3)
+            count_1 = sum(1 for t in typy if t['punkty_za_mecz'] == 1)
+            
+            ranking_data.append({
+                "Gracz": g['nick'],
+                "Punkty": g['punkty'],
+                "Dokładne wyniki (3 pkt)": count_3,
+                "Trafione rozstrzygnięcia (1 pkt)": count_1,
+                "Liczba typów": len(typy)
+            })
+            
+        if ranking_data:
+            df = pd.DataFrame(ranking_data)
             st.table(df)
 
     elif wybor == "⚙️ Panel Admina":
