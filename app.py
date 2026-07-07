@@ -165,7 +165,7 @@ else:
                     st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}**")
 
     elif wybor == "🏆 Ranking":
-        st.subheader("🏆 Ranking szczegółowy")
+        st.subheader("🏆 Podium Typerów")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
         ranking_data = []
         for g in gracze:
@@ -178,6 +178,22 @@ else:
                 "Trafione 1X2": punkty_1x2, 
                 "Trafione dokładne": punkty_dokladne
             })
+        
+        # LOGIKA PODIUM
+        if len(ranking_data) >= 3:
+            col1, col2, col3 = st.columns(3)
+            col2.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
+            col1.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
+            col3.metric("3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punkty']} pkt")
+        elif len(ranking_data) == 2:
+            col1, col2 = st.columns(2)
+            col1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
+            col2.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
+        elif len(ranking_data) == 1:
+            st.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
+
+        st.markdown("---")
+        st.subheader("Pełna tabela")
         st.table(pd.DataFrame(ranking_data))
 
     elif wybor == "⚙️ Panel Admina":
