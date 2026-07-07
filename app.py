@@ -110,7 +110,6 @@ if st.session_state.nick == '':
         rej_nick = st.text_input("Wymyśl nick:")
         rej_haslo = st.text_input("Wymyśl hasło:", type="password")
         if st.button("Zarejestruj"):
-            # WALIDACJA: Min 3 znaki
             clean_nick = rej_nick.strip()
             if len(clean_nick) < 3:
                 st.error("Nick musi składać się przynajmniej z 3 znaków!")
@@ -165,4 +164,40 @@ else:
                 
                 time_diff = lock_time - now
                 if not is_locked:
-                    if time_diff <= timedelta(
+                    # Odliczanie tylko jeśli zostało mniej niż 24h
+                    if time_diff <= timedelta(hours=24) and time_diff > timedelta(0):
+                        total_seconds = int(time_diff.total_seconds())
+                        hours = total_seconds // 3600
+                        minutes = (total_seconds % 3600) // 60
+                        countdown_str = f"⏳ Do zamknięcia typowania pozostało: {hours}h {minutes}m"
+                        if hours == 0 and minutes < 30:
+                            st.warning(countdown_str)
+                        else:
+                            st.write(countdown_str)
+                else:
+                    st.error("🔒 Typowanie zamknięte")
+                
+                stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
+                if stary_typ:
+                    st.success(f"✅ Twój typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
+                    btn_text = "Zaktualizuj typ"
+                else:
+                    btn_text = "Zapisz typ"
+
+                c1, c2 = st.columns(2)
+                g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(stary_typ[0]['typ_gospodarze']) if stary_typ else 0, key=f"g_{m['id']}", disabled=is_locked)
+                go = c2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(stary_typ[0]['typ_goscie']) if stary_typ else 0, key=f"go_{m['id']}", disabled=is_locked)
+                
+                if not is_locked and st.button(btn_text, key=f"btn_{m['id']}"):
+                    dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
+                    if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
+                    else: supabase.table("typy").insert(dane).execute()
+                    st.rerun()
+                st.markdown("---")
+
+        if zakonczone:
+            with st.expander("🏁 Zobacz zakończone mecze"):
+                for m in zakonczone:
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                        <img src="{m['logo_gospodarze']}" width="20
