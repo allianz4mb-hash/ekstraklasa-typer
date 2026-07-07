@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 import requests
+import time
 
 st.set_page_config(page_title="Typer Ekstraklasy", page_icon="⚽")
 
@@ -42,7 +43,6 @@ else:
     if st.button("Pobierz najbliższą kolejkę z API"):
         with st.spinner("Pobieranie meczów..."):
             url_api = "https://v3.football.api-sports.io/fixtures"
-            # 106 to ID polskiej Ekstraklasy, pobieramy 9 najbliższych meczów
             querystring = {"league": "106", "season": "2026", "next": "9"} 
             headers = {
                 "x-apisports-key": api_key
@@ -51,36 +51,45 @@ else:
             odpowiedz = requests.get(url_api, headers=headers, params=querystring)
             dane = odpowiedz.json()
             
-            if "response" in dane:
-                for mecz in dane["response"]:
-                    mecz_id = mecz["fixture"]["id"]
-                    data_meczu = mecz["fixture"]["date"]
-                    status = mecz["fixture"]["status"]["short"]
-                    kolejka_str = str(mecz["league"]["round"])
-                    gospodarze = mecz["teams"]["home"]["name"]
-                    goscie = mecz["teams"]["away"]["name"]
-                    
-                    try:
-                        kolejka_num = int(kolejka_str.split("-")[-1].strip())
-                    except:
-                        kolejka_num = 1
-                    
-                    # Sprawdzamy czy mecz już jest, żeby go nie zduplikować
-                    istnieje = supabase.table("mecze").select("*").eq("id", mecz_id).execute()
-                    
-                    if not istnieje.data:
-                        supabase.table("mecze").insert({
-                            "id": mecz_id,
-                            "kolejka": kolejka_num,
-                            "data_meczu": data_meczu,
-                            "gospodarze": gospodarze,
-                            "goscie": goscie,
-                            "status": status
-                        }).execute()
+            # Zabezpieczenie przed pustą odpowiedzią lub błędem API
+            if "errors" in dane and dane["errors"] and len(dane["errors"]) > 0:
+                st.error(f"Błąd API: {dane['errors']}")
+            elif "response" in dane:
+                if len(dane["response"]) == 0:
+                    st.warning("API połączyło się, ale nie zwróciło żadnych meczów. Możliwe, że to kwestia sezonu.")
+                    st.write("Szczegóły błędu:", dane)
+                else:
+                    for mecz in dane["response"]:
+                        mecz_id = mecz["fixture"]["id"]
+                        data_meczu = mecz["fixture"]["date"]
+                        status = mecz["fixture"]["status"]["short"]
+                        kolejka_str = str(mecz["league"]["round"])
+                        gospodarze = mecz["teams"]["home"]["name"]
+                        goscie = mecz["teams"]["away"]["name"]
                         
-                st.success("Mecze pobrane i zapisane w bazie!")
+                        try:
+                            kolejka_num = int(kolejka_str.split("-")[-1].strip())
+                        except:
+                            kolejka_num = 1
+                        
+                        istnieje = supabase.table("mecze").select("*").eq("id", mecz_id).execute()
+                        
+                        if not istnieje.data:
+                            supabase.table("mecze").insert({
+                                "id": mecz_id,
+                                "kolejka": kolejka_num,
+                                "data_meczu": data_meczu,
+                                "gospodarze": gospodarze,
+                                "goscie": goscie,
+                                "status": status
+                            }).execute()
+                            
+                    st.success("Mecze pobrane i zapisane w bazie!")
+                    time.sleep(1)
+                    st.rerun() # Wymusza odświeżenie strony żeby od razu pokazać mecze
             else:
-                st.error("Coś poszło nie tak z pobieraniem danych.")
+                st.error("Nieoczekiwana odpowiedź z serwera.")
+                st.write(dane)
                 
     st.subheader("Mecze do obstawienia")
     mecze_z_bazy = supabase.table("mecze").select("*").order("data_meczu").execute()
