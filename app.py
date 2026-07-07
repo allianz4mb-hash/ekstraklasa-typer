@@ -9,7 +9,6 @@ supabase: Client = create_client(url, key)
 if 'nick' not in st.session_state: 
     st.session_state.nick = ''
 
-# Zaktualizowana lista nicków z uprawnieniami Admina
 ADMINI = ["Mateusz Bielecki", "Admin"]
 
 def oblicz_punkty(typ_g, typ_go, real_g, real_go):
@@ -69,12 +68,14 @@ else:
     
     jest_adminem = st.session_state.nick in ADMINI
     
+    # Bardziej stabilne renderowanie zakładek
+    nazwy_zakladek = ["🎯 Typer", "🏆 Ranking"]
     if jest_adminem:
-        tab1, tab2, tab3 = st.tabs(["🎯 Typer", "🏆 Ranking", "⚙️ Panel Admina"])
-    else:
-        tab1, tab2 = st.tabs(["🎯 Typer", "🏆 Ranking"])
+        nazwy_zakladek.append("⚙️ Panel Admina")
+        
+    tabs = st.tabs(nazwy_zakladek)
     
-    with tab1:
+    with tabs[0]:
         st.subheader("Obstaw mecze lub zobacz wyniki")
         mecze = supabase.table("mecze").select("*").order("id").execute().data
         
@@ -119,7 +120,7 @@ else:
                     except Exception as e:
                         st.error(f"Błąd zapisu w bazie: {e}")
 
-    with tab2:
+    with tabs[1]:
         st.subheader("Tabela Typerów")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
         if gracze:
@@ -131,7 +132,7 @@ else:
             st.info("Brak zarejestrowanych graczy.")
 
     if jest_adminem:
-        with tab3:
+        with tabs[2]:
             st.subheader("Zarządzanie Grą")
             
             st.markdown("### ➕ Dodaj nowy mecz")
@@ -164,16 +165,15 @@ else:
             if mecze_do_rozliczenia:
                 opcje_meczow = {f"{m['gospodarze']} vs {m['goscie']} (ID: {m['id']})": m for m in mecze_do_rozliczenia}
                 
-                # Dodany unikalny klucz do wyboru meczu
                 wybrany_mecz_str = st.selectbox("Wybierz rozegrany mecz:", list(opcje_meczow.keys()), key="admin_wybierz_mecz")
                 mecz_obj = opcje_meczow[wybrany_mecz_str]
                 
                 col1, col2 = st.columns(2)
-                # Dynamiczne klucze, żeby zapobiec krzaczeniu się widoku zakładek!
-                res_g = col1.number_input(f"Wynik końcowy: {mecz_obj['gospodarze']}", 0, 10, key=f"res_g_{mecz_obj['id']}")
-                res_go = col2.number_input(f"Wynik końcowy: {mecz_obj['goscie']}", 0, 10, key=f"res_go_{mecz_obj['id']}")
+                # Uproszczone klucze pozwalają Streamlitowi zachować strukturę zakładek
+                res_g = col1.number_input(f"Wynik końcowy: {mecz_obj['gospodarze']}", 0, 10, key="admin_res_g")
+                res_go = col2.number_input(f"Wynik końcowy: {mecz_obj['goscie']}", 0, 10, key="admin_res_go")
                 
-                if st.button("Zakończ mecz i podlicz punkty", key=f"btn_rozlicz_{mecz_obj['id']}"):
+                if st.button("Zakończ mecz i podlicz punkty", key="btn_rozlicz_admin"):
                     try:
                         supabase.table("mecze").update({
                             "gole_gospodarze": res_g,
