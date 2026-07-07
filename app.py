@@ -128,6 +128,8 @@ else:
 
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
+        st.info("ℹ️ Typy można zapisywać i edytować do 5 minut przed rozpoczęciem meczu.")
+        
         all_mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
         
@@ -137,24 +139,26 @@ else:
         if aktywne:
             for m in aktywne:
                 mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
-                is_locked = now >= (mecz_time - timedelta(minutes=5))
+                lock_time = mecz_time - timedelta(minutes=5)
+                is_locked = now >= lock_time
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
                 
-                # Logika odliczania
-                time_diff = mecz_time - now
+                # Logika odliczania do zamknięcia
+                time_diff = lock_time - now
+                
+                st.write(f"### **{m['gospodarze']} vs {m['goscie']}**")
+                st.write(f"📅 Start (PL): {pl_time.strftime('%d.%m, %H:%M')}")
+                
                 if not is_locked and time_diff > timedelta(0):
                     hours = time_diff.seconds // 3600
                     minutes = (time_diff.seconds // 60) % 60
-                    countdown_str = f"⏳ Do startu: {hours}h {minutes}m"
+                    countdown_str = f"⏳ Do zamknięcia typowania pozostało: {hours}h {minutes}m"
                     if hours == 0 and minutes < 30:
                         st.warning(countdown_str)
                     else:
                         st.write(countdown_str)
                 elif is_locked:
-                    st.error("🔒 Zablokowane")
-                
-                st.write(f"### **{m['gospodarze']} vs {m['goscie']}**")
-                st.write(f"📅 Start: {pl_time.strftime('%d.%m, %H:%M')}")
+                    st.error("🔒 Typowanie zamknięte")
                 
                 stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
                 if stary_typ:
@@ -231,10 +235,4 @@ else:
             c1, c2 = st.columns(2)
             r_g = c1.number_input("Gole Gosp", 0, 10)
             r_go = c2.number_input("Gole Gość", 0, 10)
-            if st.button("Zakończ i podlicz"):
-                supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
-                for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
-                    pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
-                    supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
-                recalculate_all_points()
-                st.rerun()
+            if st.button("Zakończ
