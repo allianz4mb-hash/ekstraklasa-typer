@@ -147,25 +147,31 @@ else:
                 is_locked = now >= lock_time
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
                 
-                # HTML do idealnego wyrównania logotypów z nazwą
+                # HTML z logo
                 st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
                     <img src="{m['logo_gospodarze']}" width="30">
-                    <span style="font-size: 20px;"><strong>{m['gospodarze']} vs {m['goscie']}</strong></span>
+                    <span style="font-size: 18px;"><strong>{m['gospodarze']} vs {m['goscie']}</strong></span>
                     <img src="{m['logo_goscie']}" width="30">
                 </div>
                 """, unsafe_allow_html=True)
                 
                 st.write(f"📅 Start (PL): {pl_time.strftime('%d.%m, %H:%M')}")
                 
+                # Logika odliczania (tylko jeśli zostało mniej niż 24h)
                 time_diff = lock_time - now
-                if not is_locked and time_diff > timedelta(0):
-                    hours = time_diff.seconds // 3600
-                    minutes = (time_diff.seconds // 60) % 60
-                    countdown_str = f"⏳ Do zamknięcia typowania pozostało: {hours}h {minutes}m"
-                    if hours == 0 and minutes < 30: st.warning(countdown_str)
-                    else: st.write(countdown_str)
-                elif is_locked: st.error("🔒 Typowanie zamknięte")
+                if not is_locked:
+                    if time_diff <= timedelta(hours=24) and time_diff > timedelta(0):
+                        total_seconds = int(time_diff.total_seconds())
+                        hours = total_seconds // 3600
+                        minutes = (total_seconds % 3600) // 60
+                        countdown_str = f"⏳ Do zamknięcia typowania pozostało: {hours}h {minutes}m"
+                        if hours == 0 and minutes < 30:
+                            st.warning(countdown_str)
+                        else:
+                            st.write(countdown_str)
+                else:
+                    st.error("🔒 Typowanie zamknięte")
                 
                 stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
                 if stary_typ:
@@ -189,7 +195,7 @@ else:
             with st.expander("🏁 Zobacz zakończone mecze"):
                 for m in zakonczone:
                     st.markdown(f"""
-                    <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
                         <img src="{m['logo_gospodarze']}" width="20">
                         <span>{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}</span>
                         <img src="{m['logo_goscie']}" width="20">
