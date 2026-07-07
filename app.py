@@ -1,12 +1,14 @@
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
-from datetime import datetime, timedelta, timezone
+import requests
+from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
+API_KEY = "TWÓJ_API_TOKEN" # Wklej tutaj swój token
 supabase: Client = create_client(url, key)
 
 if 'nick' not in st.session_state: st.session_state.nick = ''
@@ -17,7 +19,33 @@ def oblicz_punkty(typ_g, typ_go, real_g, real_go):
     elif (typ_g > typ_go and real_g > real_go) or (typ_g < typ_go and real_g < real_go) or (typ_g == typ_go and real_g == real_go): return 1
     return 0
 
-# --- EKRAN LOGOWANIA ---
+def sync_with_api():
+    # Pobranie danych z API (Football-Data.org)
+    url_api = "https://api.football-data.org/v4/competitions/WC/matches"
+    headers = {"X-Auth-Token": API_KEY}
+    response = requests.get(url_api, headers=headers).json()
+    
+    # Przetworzenie danych
+    for match in response['matches']:
+        gosp = match['homeTeam']['name']
+        gosc = match['awayTeam']['name']
+        data = match['utcDate']
+        status = 'FT' if match['status'] == 'FINISHED' else 'NS'
+        g_g = match['score']['fullTime']['home']
+        g_go = match['score']['fullTime']['away']
+        
+        # Zapisujemy do bazy
+        supabase.table("mecze").upsert({
+            "gospodarze": gosp,
+            "goscie": gosc,
+            "data_meczu": data,
+            "status": status,
+            "gole_gospodarze": g_g,
+            "gole_goscie": g_go,
+            "kolejka": 1
+        }).execute()
+
+# --- LOGOWANIE ---
 if st.session_state.nick == '':
     st.title("⚽ Typer Mundialu")
     col1, col2 = st.columns(2)
@@ -30,7 +58,6 @@ if st.session_state.nick == '':
             if res.data and res.data[0].get('haslo') == log_haslo:
                 st.session_state.nick = log_nick
                 st.rerun()
-            else: st.error("Błędny nick lub hasło!")
     with col2:
         st.subheader("Rejestracja")
         rej_nick = st.text_input("Wymyśl nick:")
@@ -40,7 +67,6 @@ if st.session_state.nick == '':
                 supabase.table('gracze').insert({'nick': rej_nick, 'haslo': rej_haslo, 'punkty': 0}).execute()
                 st.session_state.nick = rej_nick
                 st.rerun()
-            else: st.error("Nick zajęty!")
 
 # --- EKRAN GŁÓWNY ---
 else:
@@ -53,22 +79,17 @@ else:
     st.title("⚽ Typer Mundialu")
     
     opcje = ["🎯 Typer", "🏆 Ranking"]
-    if st.session_state.nick in ADMINI:
-        opcje.append("⚙️ Panel Admina")
-    
+    if st.session_state.nick in ADMINI: opcje.append("⚙️ Panel Admina")
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
-    # --- ZAKŁADKA TYPER ---
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
-        mecze = supabase.table("mecze").select("*").order("id").execute().data
+        mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
-        
         for m in mecze:
             mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
             is_locked = now >= (mecz_time - timedelta(minutes=5))
-            
             stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
             
             if m['status'] == 'FT':
@@ -76,65 +97,40 @@ else:
             else:
                 status_tekst = "🔒 Zablokowane" if is_locked else "⏳ Otwarta"
                 st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start: {mecz_time.strftime('%H:%M')} | Status: {status_tekst}")
-                
-                col1, col2 = st.columns(2)
-                def_g = stary_typ[0]['typ_gospodarze'] if stary_typ else 0
-                def_go = stary_typ[0]['typ_goscie'] if stary_typ else 0
-                
-                g = col1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(def_g), key=f"g_{m['id']}", disabled=is_locked)
-                go = col2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(def_go), key=f"go_{m['id']}", disabled=is_locked)
-                
-                if not is_locked:
-                    if st.button("Zapisz typ", key=f"btn_{m['id']}"):
-                        dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
-                        if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
-                        else: supabase.table("typy").insert(dane).execute()
-                        st.rerun()
+                c1, c2 = st.columns(2)
+                g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(stary_typ[0]['typ_gospodarze']) if stary_typ else 0, key=f"g_{m['id']}", disabled=is_locked)
+                go = c2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(stary_typ[0]['typ_goscie']) if stary_typ else 0, key=f"go_{m['id']}", disabled=is_locked)
+                if not is_locked and st.button("Zapisz typ", key=f"btn_{m['id']}"):
+                    dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
+                    if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
+                    else: supabase.table("typy").insert(dane).execute()
+                    st.rerun()
 
-    # --- ZAKŁADKA RANKING ---
     elif wybor == "🏆 Ranking":
-        st.subheader("Tabela Typerów")
+        st.subheader("Ranking")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
         ranking_data = []
         for g in gracze:
             typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
-            count_3 = sum(1 for t in typy if t['punkty_za_mecz'] == 3)
-            count_1 = sum(1 for t in typy if t['punkty_za_mecz'] == 1)
-            ranking_data.append({
-                "Gracz": g['nick'], "Punkty": g['punkty'],
-                "Dokładne (3 pkt)": count_3, "Trafione (1 pkt)": count_1
-            })
-        if ranking_data: st.table(pd.DataFrame(ranking_data))
+            ranking_data.append({"Gracz": g['nick'], "Punkty": g['punkty'], "3 pkt": sum(1 for t in typy if t['punkty_za_mecz'] == 3)})
+        st.table(pd.DataFrame(ranking_data))
 
-    # --- ZAKŁADKA ADMIN ---
     elif wybor == "⚙️ Panel Admina":
-        st.subheader("Zarządzanie Grą")
+        st.subheader("Zarządzanie")
+        if st.button("🔄 POBIERZ MECZE Z API"):
+            with st.spinner("Synchronizacja..."):
+                sync_with_api()
+                st.success("Zsynchronizowano!")
         
-        # BULK IMPORT
-        with st.expander("➕ Masowe dodawanie meczów (CSV)"):
-            st.write("Wklej mecze w formacie: `Gospodarz;Gość;YYYY-MM-DD HH:MM` (każdy w nowej linii)")
-            text_data = st.text_area("Lista meczów:")
-            if st.button("Dodaj listę"):
-                for line in text_data.split('\n'):
-                    if ';' in line:
-                        g, go, czas = line.split(';')
-                        supabase.table("mecze").insert({
-                            "gospodarze": g, "goscie": go, "status": "NS",
-                            "data_meczu": czas.replace(' ', 'T') + ":00+00:00",
-                            "kolejka": 1, "gole_gospodarze": None, "gole_goscie": None
-                        }).execute()
-                st.success("Dodano!")
-                st.rerun()
-
-        st.markdown("### 🏁 Rozlicz mecz")
+        st.markdown("### Rozlicz ręcznie")
         mecze_do = supabase.table("mecze").select("*").neq("status", "FT").execute().data
         if mecze_do:
-            opcje_m = {f"{m['gospodarze']} vs {m['goscie']} (ID: {m['id']})": m for m in mecze_do}
+            opcje_m = {f"{m['gospodarze']} vs {m['goscie']}": m for m in mecze_do}
             sel = st.selectbox("Wybierz mecz:", list(opcje_m.keys()))
             m = opcje_m[sel]
             c1, c2 = st.columns(2)
-            r_g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, key="r_g")
-            r_go = c2.number_input(f"Gole {m['goscie']}", 0, 10, key="r_go")
+            r_g = c1.number_input("Gole Gosp", 0, 10)
+            r_go = c2.number_input("Gole Gość", 0, 10)
             if st.button("Zakończ i podlicz"):
                 supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
                 for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
