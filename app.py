@@ -24,13 +24,14 @@ supabase: Client = create_client(url, key)
 if 'nick' not in st.session_state: st.session_state.nick = ''
 ADMINI = ["Mateusz Bielecki", "Admin"]
 
-# --- FUNKCJE ---
+# --- FUNKCJE BEZPIECZEŃSTWA ---
 def hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def check_password(password, hashed):
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
+# --- FUNKCJE LOGIKI ---
 def oblicz_punkty(typ_g, typ_go, real_g, real_go):
     if typ_g == real_g and typ_go == real_go: return 3
     elif (typ_g > typ_go and real_g > real_go) or (typ_g < typ_go and real_g < real_go) or (typ_g == typ_go and real_g == real_go): return 1
@@ -64,7 +65,6 @@ def sync_with_api():
             logo_g = match['homeTeam'].get('crest')
             logo_go = match['awayTeam'].get('crest')
             data_str = match['utcDate']
-            
             existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
             
             status = 'FT' if match['status'] == 'FINISHED' else 'NS'
@@ -87,7 +87,7 @@ def sync_with_api():
                 supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
             else:
                 supabase.table("mecze").insert(dane_meczu).execute()
-        st.success(f"Zsynchronizowano {len(matches)} meczów z logo!")
+        st.success(f"Zsynchronizowano {len(matches)} meczów!")
     except Exception as e:
         st.error(f"Błąd: {e}")
 
@@ -104,6 +104,7 @@ if st.session_state.nick == '':
             if res.data and check_password(log_haslo, res.data[0].get('haslo')):
                 st.session_state.nick = log_nick
                 st.rerun()
+            else: st.error("Błędny nick lub hasło!")
     with col2:
         st.subheader("Rejestracja")
         rej_nick = st.text_input("Wymyśl nick:")
@@ -114,6 +115,7 @@ if st.session_state.nick == '':
                 supabase.table('gracze').insert({'nick': rej_nick, 'haslo': hashed_pw, 'punkty': 0}).execute()
                 st.session_state.nick = rej_nick
                 st.rerun()
+            else: st.error("Nick zajęty!")
 
 else:
     with st.sidebar:
@@ -145,23 +147,25 @@ else:
                 is_locked = now >= lock_time
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
                 
-                # Wyświetlanie meczu z logo
-                cols = st.columns([1, 4, 1])
-                if m.get('logo_gospodarze'): cols[0].image(m['logo_gospodarze'], width=50)
-                if m.get('logo_goscie'): cols[2].image(m['logo_goscie'], width=50)
+                # HTML do idealnego wyrównania logotypów z nazwą
+                st.markdown(f"""
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <img src="{m['logo_gospodarze']}" width="30">
+                    <span style="font-size: 20px;"><strong>{m['gospodarze']} vs {m['goscie']}</strong></span>
+                    <img src="{m['logo_goscie']}" width="30">
+                </div>
+                """, unsafe_allow_html=True)
                 
-                with cols[1]:
-                    st.write(f"### {m['gospodarze']} vs {m['goscie']}")
-                    st.write(f"📅 Start (PL): {pl_time.strftime('%d.%m, %H:%M')}")
-                    
-                    time_diff = lock_time - now
-                    if not is_locked and time_diff > timedelta(0):
-                        hours = time_diff.seconds // 3600
-                        minutes = (time_diff.seconds // 60) % 60
-                        countdown_str = f"⏳ Do zamknięcia: {hours}h {minutes}m"
-                        if hours == 0 and minutes < 30: st.warning(countdown_str)
-                        else: st.write(countdown_str)
-                    elif is_locked: st.error("🔒 Typowanie zamknięte")
+                st.write(f"📅 Start (PL): {pl_time.strftime('%d.%m, %H:%M')}")
+                
+                time_diff = lock_time - now
+                if not is_locked and time_diff > timedelta(0):
+                    hours = time_diff.seconds // 3600
+                    minutes = (time_diff.seconds // 60) % 60
+                    countdown_str = f"⏳ Do zamknięcia typowania pozostało: {hours}h {minutes}m"
+                    if hours == 0 and minutes < 30: st.warning(countdown_str)
+                    else: st.write(countdown_str)
+                elif is_locked: st.error("🔒 Typowanie zamknięte")
                 
                 stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
                 if stary_typ:
@@ -184,10 +188,13 @@ else:
         if zakonczone:
             with st.expander("🏁 Zobacz zakończone mecze"):
                 for m in zakonczone:
-                    cols = st.columns([1, 4, 1])
-                    if m.get('logo_gospodarze'): cols[0].image(m['logo_gospodarze'], width=30)
-                    if m.get('logo_goscie'): cols[2].image(m['logo_goscie'], width=30)
-                    cols[1].write(f"🏁 {m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}")
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="{m['logo_gospodarze']}" width="20">
+                        <span>{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}</span>
+                        <img src="{m['logo_goscie']}" width="20">
+                    </div>
+                    """, unsafe_allow_html=True)
 
     elif wybor == "🏆 Ranking":
         st.subheader("🏆 Podium Typerów")
