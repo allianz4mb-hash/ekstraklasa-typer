@@ -9,6 +9,7 @@ supabase: Client = create_client(url, key)
 if 'nick' not in st.session_state: 
     st.session_state.nick = ''
 
+# Tutaj wpisałem Twoją pełną nazwę jako Admina
 ADMINI = ["Mateusz Bielecki", "Admin"]
 
 def oblicz_punkty(typ_g, typ_go, real_g, real_go):
@@ -20,7 +21,6 @@ def oblicz_punkty(typ_g, typ_go, real_g, real_go):
 
 if st.session_state.nick == '':
     st.title("⚽ Typer Mundialu")
-    
     tab_log, tab_rej = st.tabs(["🔐 Logowanie", "📝 Rejestracja"])
     
     with tab_log:
@@ -28,35 +28,24 @@ if st.session_state.nick == '':
         log_nick = st.text_input("Nick:", key="log_nick")
         log_haslo = st.text_input("Hasło:", type="password", key="log_haslo")
         if st.button("Zaloguj", key="btn_log"):
-            if log_nick and log_haslo:
-                res = supabase.table('gracze').select('*').eq('nick', log_nick).execute()
-                if res.data:
-                    if res.data[0].get('haslo') == log_haslo:
-                        st.session_state.nick = log_nick
-                        st.rerun()
-                    else:
-                        st.error("Błędne hasło!")
-                else:
-                    st.error("Konto z takim nickiem nie istnieje. Sprawdź literówki lub przejdź do rejestracji.")
+            res = supabase.table('gracze').select('*').eq('nick', log_nick).execute()
+            if res.data and res.data[0].get('haslo') == log_haslo:
+                st.session_state.nick = log_nick
+                st.rerun()
             else:
-                st.warning("Wpisz nick i hasło.")
+                st.error("Błędny nick lub hasło!")
 
     with tab_rej:
         st.subheader("Załóż nowe konto")
         rej_nick = st.text_input("Wymyśl nick:", key="rej_nick")
         rej_haslo = st.text_input("Wymyśl hasło:", type="password", key="rej_haslo")
         if st.button("Zarejestruj", key="btn_rej"):
-            if rej_nick and rej_haslo:
-                res = supabase.table('gracze').select('*').eq('nick', rej_nick).execute()
-                if not res.data:
-                    supabase.table('gracze').insert({'nick': rej_nick, 'haslo': rej_haslo, 'punkty': 0}).execute()
-                    st.session_state.nick = rej_nick
-                    st.rerun()
-                else:
-                    st.error("Ten nick jest już zajęty. Wymyśl inny!")
+            if not supabase.table('gracze').select('*').eq('nick', rej_nick).execute().data:
+                supabase.table('gracze').insert({'nick': rej_nick, 'haslo': rej_haslo, 'punkty': 0}).execute()
+                st.session_state.nick = rej_nick
+                st.rerun()
             else:
-                st.warning("Uzupełnij wszystkie pola.")
-
+                st.error("Ten nick jest już zajęty!")
 else:
     with st.sidebar:
         st.write(f"Zalogowany jako: **{st.session_state.nick}**")
@@ -67,138 +56,64 @@ else:
     st.title(f"⚽ Typer Mundialu")
     
     jest_adminem = st.session_state.nick in ADMINI
-    
-    # Bardziej stabilne renderowanie zakładek
     nazwy_zakladek = ["🎯 Typer", "🏆 Ranking"]
-    if jest_adminem:
-        nazwy_zakladek.append("⚙️ Panel Admina")
+    if jest_adminem: nazwy_zakladek.append("⚙️ Panel Admina")
         
     tabs = st.tabs(nazwy_zakladek)
     
     with tabs[0]:
-        st.subheader("Obstaw mecze lub zobacz wyniki")
+        st.subheader("Obstaw mecze")
         mecze = supabase.table("mecze").select("*").order("id").execute().data
-        
         for m in mecze:
             st.write(f"---")
             stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
-            
             if m['status'] == 'FT':
-                st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}** (Mecz zakończony)")
-                if stary_typ:
-                    t = stary_typ[0]
-                    st.info(f"Twój typ: {t['typ_gospodarze']}:{t['typ_goscie']} | Zdobyte punkty: **{t['punkty_za_mecz']}**")
-                else:
-                    st.warning("Nie obstawiłeś tego meczu. Punkty: 0")
+                st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}**")
+                if stary_typ: st.info(f"Twój typ: {stary_typ[0]['typ_gospodarze']}:{stary_typ[0]['typ_goscie']} | Punkty: {stary_typ[0]['punkty_za_mecz']}")
             else:
                 st.write(f"⏳ **{m['gospodarze']}** vs **{m['goscie']}**")
-                
                 def_g = stary_typ[0]['typ_gospodarze'] if stary_typ else 0
                 def_go = stary_typ[0]['typ_goscie'] if stary_typ else 0
-                
                 col1, col2 = st.columns(2)
                 g = col1.number_input(f"Gole: {m['gospodarze']}", 0, 10, value=int(def_g), key=f"g_{m['id']}")
                 go = col2.number_input(f"Gole: {m['goscie']}", 0, 10, value=int(def_go), key=f"go_{m['id']}")
-                
-                tekst_przycisku = "Zaktualizuj swój typ" if stary_typ else "Zapisz mój typ"
-                
-                if st.button(tekst_przycisku, key=f"btn_{m['id']}"):
-                    dane_typu = {
-                        "nick": st.session_state.nick,
-                        "mecz_id": m['id'],
-                        "typ_gospodarze": g,
-                        "typ_goscie": go,
-                        "rozliczony": False
-                    }
-                    try:
-                        if stary_typ:
-                            supabase.table("typy").update(dane_typu).eq("id", stary_typ[0]['id']).execute()
-                        else:
-                            supabase.table("typy").insert(dane_typu).execute()
-                        st.success("Zapisano!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Błąd zapisu w bazie: {e}")
+                if st.button("Zapisz typ", key=f"btn_{m['id']}"):
+                    dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
+                    if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
+                    else: supabase.table("typy").insert(dane).execute()
+                    st.rerun()
 
     with tabs[1]:
         st.subheader("Tabela Typerów")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
         if gracze:
             df = pd.DataFrame(gracze)
-            df.index = df.index + 1
             df.columns = ["Gracz", "Suma Punktów"]
             st.table(df)
-        else:
-            st.info("Brak zarejestrowanych graczy.")
 
     if jest_adminem:
         with tabs[2]:
             st.subheader("Zarządzanie Grą")
-            
-            st.markdown("### ➕ Dodaj nowy mecz")
-            col_gosp, col_gosc = st.columns(2)
-            gosp = col_gosp.text_input("Gospodarze", key="admin_add_gosp")
-            gosc = col_gosc.text_input("Goście", key="admin_add_gosc")
-            if st.button("Dodaj mecz do bazy", key="btn_add_mecz"):
-                if gosp and gosc:
-                    nowy_mecz = {
-                        "gospodarze": gosp,
-                        "goscie": gosc,
-                        "status": "NS",
-                        "data_meczu": "2026-07-08T20:00:00+00:00",
-                        "kolejka": 1,
-                        "gole_gospodarze": None,
-                        "gole_goscie": None
-                    }
-                    try:
-                        supabase.table("mecze").insert(nowy_mecz).execute()
-                        st.success(f"Dodano mecz: {gosp} vs {gosc}!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Błąd bazy: {e}")
-                else:
-                    st.warning("Uzupełnij obie drużyny!")
+            # Używamy formularza (st.form), aby uniknąć przeładowywania strony przy każdej zmianie
+            with st.form("admin_form"):
+                mecze_do_rozliczenia = supabase.table("mecze").select("*").neq("status", "FT").execute().data
+                if mecze_do_rozliczenia:
+                    opcje = {f"{m['gospodarze']} vs {m['goscie']} (ID: {m['id']})": m for m in mecze_do_rozliczenia}
+                    wybrany_mecz_str = st.selectbox("Wybierz mecz:", list(opcje.keys()))
+                    mecz_obj = opcje[wybrany_mecz_str]
                     
-            st.markdown("### 🏁 Rozlicz wynik meczu i przyznaj punkty")
-            mecze_do_rozliczenia = supabase.table("mecze").select("*").neq("status", "FT").execute().data
-            
-            if mecze_do_rozliczenia:
-                opcje_meczow = {f"{m['gospodarze']} vs {m['goscie']} (ID: {m['id']})": m for m in mecze_do_rozliczenia}
-                
-                wybrany_mecz_str = st.selectbox("Wybierz rozegrany mecz:", list(opcje_meczow.keys()), key="admin_wybierz_mecz")
-                mecz_obj = opcje_meczow[wybrany_mecz_str]
-                
-                col1, col2 = st.columns(2)
-                # Uproszczone klucze pozwalają Streamlitowi zachować strukturę zakładek
-                res_g = col1.number_input(f"Wynik końcowy: {mecz_obj['gospodarze']}", 0, 10, key="admin_res_g")
-                res_go = col2.number_input(f"Wynik końcowy: {mecz_obj['goscie']}", 0, 10, key="admin_res_go")
-                
-                if st.button("Zakończ mecz i podlicz punkty", key="btn_rozlicz_admin"):
-                    try:
-                        supabase.table("mecze").update({
-                            "gole_gospodarze": res_g,
-                            "gole_goscie": res_go,
-                            "status": "FT"
-                        }).eq("id", mecz_obj['id']).execute()
-                        
-                        wszystkie_typy = supabase.table("typy").select("*").eq("mecz_id", mecz_obj['id']).execute().data
-                        
-                        for t in wszystkie_typy:
+                    c1, c2 = st.columns(2)
+                    res_g = c1.number_input(f"Wynik {mecz_obj['gospodarze']}", 0, 10)
+                    res_go = c2.number_input(f"Wynik {mecz_obj['goscie']}", 0, 10)
+                    
+                    submitted = st.form_submit_button("Zakończ mecz i podlicz punkty")
+                    if submitted:
+                        supabase.table("mecze").update({"gole_gospodarze": res_g, "gole_goscie": res_go, "status": "FT"}).eq("id", mecz_obj['id']).execute()
+                        for t in supabase.table("typy").select("*").eq("mecz_id", mecz_obj['id']).execute().data:
                             pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], res_g, res_go)
-                            supabase.table("typy").update({
-                                "punkty_za_mecz": pts,
-                                "rozliczony": True
-                            }).eq("id", t['id']).execute()
-                        
-                        wszyscy_gracze = supabase.table("gracze").select("nick").execute().data
-                        for gracz in wszyscy_gracze:
-                            typy_gracza = supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data
-                            suma_punktow = sum([item['punkty_za_mecz'] for item in typy_gracza if item['punkty_za_mecz'] is not None])
-                            supabase.table("gracze").update({"punkty": suma_punktow}).eq("nick", gracz['nick']).execute()
-                            
-                        st.success("Mecz rozliczony! Punkty zostały dodane, a ranking zaktualizowany.")
+                            supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
+                        for gracz in supabase.table("gracze").select("nick").execute().data:
+                            suma = sum([item['punkty_za_mecz'] for item in supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data if item['punkty_za_mecz']])
+                            supabase.table("gracze").update({"punkty": suma}).eq("nick", gracz['nick']).execute()
+                        st.success("Rozliczono!")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Błąd podczas rozliczania: {e}")
-            else:
-                st.info("Wszystkie mecze w bazie są już rozliczone.")
