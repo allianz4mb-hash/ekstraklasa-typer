@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import bcrypt
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 
 # --- KONFIGURACJA ---
@@ -135,12 +136,17 @@ else:
 
         if aktywne:
             for m in aktywne:
+                # Czas bazowy (UTC)
                 mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
+                # Czas do blokady (używamy UTC do logicznej blokady, żeby było spójne)
                 is_locked = now >= (mecz_time - timedelta(minutes=5))
+                # Czas dla Polski do wyświetlenia
+                pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
+                
                 stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
                 
                 status_tekst = "🔒 Zablokowane" if is_locked else "⏳ Otwarta"
-                st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start: {mecz_time.strftime('%H:%M')} | {status_tekst}")
+                st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start (PL): {pl_time.strftime('%H:%M')} | {status_tekst}")
                 
                 if stary_typ:
                     st.success(f"✅ Twój zapisany typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
@@ -179,7 +185,7 @@ else:
                 "Trafione dokładne": punkty_dokladne
             })
         
-        # LOGIKA PODIUM - 1-2-3 Od lewej do prawej dla poprawnej responsywności
+        # LOGIKA PODIUM
         if len(ranking_data) >= 3:
             col1, col2, col3 = st.columns(3)
             col1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
