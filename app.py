@@ -179,11 +179,11 @@ else:
                 "Trafione dokładne": punkty_dokladne
             })
         
-        # LOGIKA PODIUM
+        # LOGIKA PODIUM - 1-2-3 Od lewej do prawej dla poprawnej responsywności
         if len(ranking_data) >= 3:
             col1, col2, col3 = st.columns(3)
-            col2.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
-            col1.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
+            col1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
+            col2.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
             col3.metric("3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punkty']} pkt")
         elif len(ranking_data) == 2:
             col1, col2 = st.columns(2)
