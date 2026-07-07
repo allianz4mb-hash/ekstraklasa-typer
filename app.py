@@ -142,7 +142,6 @@ else:
                 status_tekst = "🔒 Zablokowane" if is_locked else "⏳ Otwarta"
                 st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start: {mecz_time.strftime('%H:%M')} | {status_tekst}")
                 
-                # WYŚWIETLENIE ISTNIEJĄCEGO TYPU
                 if stary_typ:
                     st.success(f"✅ Twój zapisany typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
                     btn_text = "Zaktualizuj typ"
@@ -166,12 +165,19 @@ else:
                     st.write(f"🏁 **{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}**")
 
     elif wybor == "🏆 Ranking":
-        st.subheader("Ranking")
+        st.subheader("🏆 Ranking szczegółowy")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
         ranking_data = []
         for g in gracze:
             typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
-            ranking_data.append({"Gracz": g['nick'], "Punkty": g['punkty'], "3 pkt": sum(1 for t in typy if t['punkty_za_mecz'] == 3)})
+            punkty_1x2 = sum(1 for t in typy if t.get('punkty_za_mecz') == 1)
+            punkty_dokladne = sum(1 for t in typy if t.get('punkty_za_mecz') == 3)
+            ranking_data.append({
+                "Gracz": g['nick'], 
+                "Punkty": g['punkty'], 
+                "Trafione 1X2": punkty_1x2, 
+                "Trafione dokładne": punkty_dokladne
+            })
         st.table(pd.DataFrame(ranking_data))
 
     elif wybor == "⚙️ Panel Admina":
