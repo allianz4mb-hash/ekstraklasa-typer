@@ -5,7 +5,8 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-if 'nick' not in st.session_state: st.session_state.nick = ''
+if 'nick' not in st.session_state: 
+    st.session_state.nick = ''
 
 if st.session_state.nick == '':
     wpisany_nick = st.text_input("Nick:")
@@ -43,7 +44,7 @@ else:
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
         st.table(gracze)
 
-  with tab3:
+    with tab3:
         st.subheader("Panel Admina")
         gosp = st.text_input("Gospodarze")
         gosc = st.text_input("Goście")
@@ -54,11 +55,15 @@ else:
                 "status": "NS",
                 "data_meczu": "2026-07-08T20:00:00+00:00",
                 "kolejka": 1,
-                "gole_gospodarze": None, # Jawnie ustawiamy na puste
-                "gole_goscie": None      # Jawnie ustawiamy na puste
+                "gole_gospodarze": None,
+                "gole_goscie": None
             }
             try:
                 supabase.table("mecze").insert(nowy_mecz).execute()
                 st.success("Dodano mecz!")
             except Exception as e:
                 st.error(f"Błąd bazy: {e}")
+        
+        if st.button("Wyloguj"):
+            st.session_state.nick = ''
+            st.rerun()
