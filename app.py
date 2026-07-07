@@ -62,7 +62,6 @@ def sync_with_api():
             gosp = match['homeTeam']['name']
             gosc = match['awayTeam']['name']
             data_str = match['utcDate']
-            # Szukamy czy mecz już istnieje, żeby nie dublować
             existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
             
             status = 'FT' if match['status'] == 'FINISHED' else 'NS'
@@ -83,8 +82,7 @@ def sync_with_api():
                 supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
             else:
                 supabase.table("mecze").insert(dane_meczu).execute()
-                
-        st.success(f"Zsynchronizowano pomyślnie {len(matches)} meczów!")
+        st.success(f"Zsynchronizowano {len(matches)} meczów!")
     except Exception as e:
         st.error(f"Błąd: {e}")
 
@@ -143,10 +141,19 @@ else:
                 
                 status_tekst = "🔒 Zablokowane" if is_locked else "⏳ Otwarta"
                 st.write(f"**{m['gospodarze']}** vs **{m['goscie']}** | Start: {mecz_time.strftime('%H:%M')} | {status_tekst}")
+                
+                # WYŚWIETLENIE ISTNIEJĄCEGO TYPU
+                if stary_typ:
+                    st.success(f"✅ Twój zapisany typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
+                    btn_text = "Zaktualizuj typ"
+                else:
+                    btn_text = "Zapisz typ"
+
                 c1, c2 = st.columns(2)
                 g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(stary_typ[0]['typ_gospodarze']) if stary_typ else 0, key=f"g_{m['id']}", disabled=is_locked)
                 go = c2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(stary_typ[0]['typ_goscie']) if stary_typ else 0, key=f"go_{m['id']}", disabled=is_locked)
-                if not is_locked and st.button("Zapisz typ", key=f"btn_{m['id']}"):
+                
+                if not is_locked and st.button(btn_text, key=f"btn_{m['id']}"):
                     dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
                     if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
                     else: supabase.table("typy").insert(dane).execute()
@@ -174,7 +181,7 @@ else:
                 sync_with_api()
                 st.rerun()
         
-        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW (Usuwa widma)"):
+        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW"):
             with st.spinner("Przeliczanie..."):
                 recalculate_all_points()
                 st.success("Punkty przeliczone!")
