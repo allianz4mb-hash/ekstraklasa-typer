@@ -24,18 +24,19 @@ else:
         st.subheader("Obstaw mecze")
         mecze = supabase.table("mecze").select("*").execute().data
         for m in mecze:
-            col1, col2, col3 = st.columns([3, 1, 3])
-            col1.write(f"{m['gospodarze']} vs {m['goscie']}")
-            g = col2.number_input("G", 0, 10, key=f"g_{m['id']}")
-            go = col2.number_input("Go", 0, 10, key=f"go_{m['id']}")
-            if col2.button("Zapisz", key=f"btn_{m['id']}"):
+            st.write(f"---")
+            st.write(f"**{m['gospodarze']}** vs **{m['goscie']}**")
+            col1, col2 = st.columns(2)
+            g = col1.number_input("Gole Gospodarze", 0, 10, key=f"g_{m['id']}")
+            go = col2.number_input("Gole Goście", 0, 10, key=f"go_{m['id']}")
+            if st.button("Zapisz typ", key=f"btn_{m['id']}"):
                 supabase.table("typy").upsert({
                     "nick": st.session_state.nick,
                     "mecz_id": m['id'],
                     "typ_gospodarze": g,
                     "typ_goscie": go
                 }).execute()
-                st.success("Zapisano!")
+                st.success("Zapisano typ!")
 
     with tab2:
         st.subheader("Ranking")
@@ -43,6 +44,17 @@ else:
         st.table(gracze)
 
     with tab3:
+        st.subheader("Panel Admina")
+        gosp = st.text_input("Gospodarze")
+        gosc = st.text_input("Goście")
+        if st.button("Dodaj mecz"):
+            supabase.table("mecze").insert({
+                "gospodarze": gosp,
+                "goscie": gosc,
+                "status": "NS",
+                "data_meczu": "2026-07-07T20:00:00+00:00"
+            }).execute()
+            st.success("Dodano mecz!")
         if st.button("Wyloguj"):
             st.session_state.nick = ''
             st.rerun()
