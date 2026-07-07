@@ -9,7 +9,7 @@ supabase: Client = create_client(url, key)
 if 'nick' not in st.session_state: 
     st.session_state.nick = ''
 
-# Lista nicków, które mają dostęp do zakładki Admina
+# Zaktualizowana lista nicków z uprawnieniami Admina
 ADMINI = ["Mateusz Bielecki", "Admin"]
 
 def oblicz_punkty(typ_g, typ_go, real_g, real_go):
@@ -59,7 +59,6 @@ if st.session_state.nick == '':
                 st.warning("Uzupełnij wszystkie pola.")
 
 else:
-    # Wylogowanie zawsze widoczne w pasku bocznym
     with st.sidebar:
         st.write(f"Zalogowany jako: **{st.session_state.nick}**")
         if st.button("Wyloguj się"):
@@ -68,7 +67,6 @@ else:
 
     st.title(f"⚽ Typer Mundialu")
     
-    # Ukrywanie zakładki Admina przed zwykłymi graczami
     jest_adminem = st.session_state.nick in ADMINI
     
     if jest_adminem:
@@ -101,7 +99,6 @@ else:
                 g = col1.number_input(f"Gole: {m['gospodarze']}", 0, 10, value=int(def_g), key=f"g_{m['id']}")
                 go = col2.number_input(f"Gole: {m['goscie']}", 0, 10, value=int(def_go), key=f"go_{m['id']}")
                 
-                # Dynamiczna nazwa przycisku
                 tekst_przycisku = "Zaktualizuj swój typ" if stary_typ else "Zapisz mój typ"
                 
                 if st.button(tekst_przycisku, key=f"btn_{m['id']}"):
@@ -138,9 +135,10 @@ else:
             st.subheader("Zarządzanie Grą")
             
             st.markdown("### ➕ Dodaj nowy mecz")
-            gosp = st.text_input("Gospodarze")
-            gosc = st.text_input("Goście")
-            if st.button("Dodaj mecz do bazy"):
+            col_gosp, col_gosc = st.columns(2)
+            gosp = col_gosp.text_input("Gospodarze", key="admin_add_gosp")
+            gosc = col_gosc.text_input("Goście", key="admin_add_gosc")
+            if st.button("Dodaj mecz do bazy", key="btn_add_mecz"):
                 if gosp and gosc:
                     nowy_mecz = {
                         "gospodarze": gosp,
@@ -165,14 +163,17 @@ else:
             
             if mecze_do_rozliczenia:
                 opcje_meczow = {f"{m['gospodarze']} vs {m['goscie']} (ID: {m['id']})": m for m in mecze_do_rozliczenia}
-                wybrany_mecz_str = st.selectbox("Wybierz rozegrany mecz:", list(opcje_meczow.keys()))
+                
+                # Dodany unikalny klucz do wyboru meczu
+                wybrany_mecz_str = st.selectbox("Wybierz rozegrany mecz:", list(opcje_meczow.keys()), key="admin_wybierz_mecz")
                 mecz_obj = opcje_meczow[wybrany_mecz_str]
                 
                 col1, col2 = st.columns(2)
-                res_g = col1.number_input(f"Wynik końcowy: {mecz_obj['gospodarze']}", 0, 10, key="res_g")
-                res_go = col2.number_input(f"Wynik końcowy: {mecz_obj['goscie']}", 0, 10, key="res_go")
+                # Dynamiczne klucze, żeby zapobiec krzaczeniu się widoku zakładek!
+                res_g = col1.number_input(f"Wynik końcowy: {mecz_obj['gospodarze']}", 0, 10, key=f"res_g_{mecz_obj['id']}")
+                res_go = col2.number_input(f"Wynik końcowy: {mecz_obj['goscie']}", 0, 10, key=f"res_go_{mecz_obj['id']}")
                 
-                if st.button("Zakończ mecz i podlicz punkty"):
+                if st.button("Zakończ mecz i podlicz punkty", key=f"btn_rozlicz_{mecz_obj['id']}"):
                     try:
                         supabase.table("mecze").update({
                             "gole_gospodarze": res_g,
