@@ -108,14 +108,15 @@ else:
             sel = st.selectbox("Wybierz mecz:", list(opcje_m.keys()))
             m = opcje_m[sel]
             c1, c2 = st.columns(2)
-            r_g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, key="r_g")
-            r_go = c2.number_input(f"Gole {m['goscie']}", 0, 10, key="r_go")
+            r_g = c1.number_input(f"Wynik {m['gospodarze']}", 0, 10, key="r_g")
+            r_go = c2.number_input(f"Wynik {m['goscie']}", 0, 10, key="r_go")
             if st.button("Zakończ i podlicz"):
                 supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
                 for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
                     pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
                     supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
                 
+                # Poprawiona linia:
                 for gracz in supabase.table("gracze").select("nick").execute().data:
                     typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", gracz['nick']).execute().data
                     suma = sum([t['punkty_za_mecz'] for t in typy if t['punkty_za_mecz'] is not None])
