@@ -143,7 +143,6 @@ else:
                 is_locked = now >= lock_time
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
                 
-                # Logika odliczania do zamknięcia
                 time_diff = lock_time - now
                 
                 st.write(f"### **{m['gospodarze']} vs {m['goscie']}**")
@@ -235,4 +234,10 @@ else:
             c1, c2 = st.columns(2)
             r_g = c1.number_input("Gole Gosp", 0, 10)
             r_go = c2.number_input("Gole Gość", 0, 10)
-            if st.button("Zakończ
+            if st.button("Zakończ i podlicz"):
+                supabase.table("mecze").update({"gole_gospodarze": r_g, "gole_goscie": r_go, "status": "FT"}).eq("id", m['id']).execute()
+                for t in supabase.table("typy").select("*").eq("mecz_id", m['id']).execute().data:
+                    pts = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], r_g, r_go)
+                    supabase.table("typy").update({"punkty_za_mecz": pts, "rozliczony": True}).eq("id", t['id']).execute()
+                recalculate_all_points()
+                st.rerun()
