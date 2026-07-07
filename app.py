@@ -58,7 +58,6 @@ else:
     wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
-    # Prawidłowa struktura: if -> elif -> elif
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
         mecze = supabase.table("mecze").select("*").order("id").execute().data
