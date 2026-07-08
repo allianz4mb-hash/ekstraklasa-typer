@@ -109,6 +109,26 @@ def sync_with_api():
         return True, "Zaktualizowano!"
     except Exception as e: return False, str(e)
 
+# Funkcja do sprawdzania czy trzeba zrobić sync
+def check_and_sync():
+    try:
+        res = supabase.table("ustawienia").select("ostatnia_sync").eq("id", 1).execute()
+        # Jeśli nie ma ustawień, to synchronizuj
+        if not res.data:
+            sync_with_api()
+            return
+        
+        last_sync_str = res.data[0].get('ostatnia_sync')
+        if not last_sync_str:
+            sync_with_api()
+            return
+
+        last_sync = datetime.fromisoformat(last_sync_str.replace('Z', '+00:00'))
+        # Synchronizacja co 30 minut
+        if datetime.now(timezone.utc) - last_sync > timedelta(minutes=30):
+            sync_with_api()
+    except: pass
+
 def get_last_sync_time():
     try:
         res = supabase.table("ustawienia").select("ostatnia_sync").eq("id", 1).execute()
@@ -118,15 +138,19 @@ def get_last_sync_time():
     except: pass
     return "Brak danych"
 
+# Uruchamiamy synchronizację automatyczną przy wczytaniu strony
+check_and_sync()
+
 # --- NAGŁÓWEK ---
 def render_header():
-    # Używamy flexboxa dla precyzyjnego wyrównania logo i tytułu
     st.markdown("""
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px;">
             <img src="https://www.markt-kom.com/wp-content/uploads/2023/07/officialLogo-600x578.png" width="50">
             <h1 style="margin: 0;">FIFA World Cup 2026</h1>
         </div>
     """, unsafe_allow_html=True)
+    # Zegar synchronizacji pod tytułem
+    st.caption(f"🕒 Ostatnia automatyczna synchronizacja: **{get_last_sync_time()}**")
 
 # --- LOGIKA GŁÓWNA ---
 if st.session_state.nick == '':
@@ -160,7 +184,6 @@ if st.session_state.nick == '':
 else:
     with st.sidebar:
         st.write(f"Zalogowany: **{st.session_state.nick}**")
-        st.write(f"🕒 Ostatnia sync: **{get_last_sync_time()}**")
         if st.button("Wyloguj się"):
             st.session_state.nick = ''
             st.query_params.clear()
@@ -228,7 +251,6 @@ else:
             typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
             p1x2 = sum(1 for t in typy if t.get('punkty_za_mecz') == 1)
             p3 = sum(1 for t in typy if t.get('punkty_za_mecz') == 3)
-            # Zmienione nazewnictwo kolumn na bardziej przejrzyste
             ranking_data.append({
                 "Gracz": g['nick'], 
                 "Punktacja Ogólna": g['punkty'], 
