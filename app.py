@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 
 # 1. KONFIGURACJA STRONY
-st.set_page_config(page_title="Typer Mundialu", layout="wide")
+st.set_page_config(page_title="FIFA World Cup 2026", layout="wide")
 
 def get_secret(key):
     try:
@@ -124,7 +124,7 @@ def render_header():
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
             <img src="https://www.markt-kom.com/wp-content/uploads/2023/07/officialLogo-600x578.png" width="50">
-            <h1 style="margin: 0;">Typer Mundialu</h1>
+            <h1 style="margin: 0;">FIFA World Cup 2026</h1>
         </div>
     """, unsafe_allow_html=True)
 
