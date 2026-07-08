@@ -7,10 +7,10 @@ from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 from streamlit_cookies_controller import CookieController
 
-# 1. KONFIGURACJA STRONY - ABSOLUTNIE PIERWSZA
+# 1. KONFIGURACJA STRONY (Musi być pierwsza!)
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
-# 2. KONTROLER CIASTECZEK - DRUGI
+# 2. INICJALIZACJA CIASTECZEK (Druga!)
 controller = CookieController()
 
 def get_secret(key):
@@ -20,7 +20,7 @@ def get_secret(key):
         st.error(f"BRAKUJE SEKRETU: {key}.")
         st.stop()
 
-# Inicjalizacja sesji
+# Inicjalizacja sesji z ciasteczka
 if 'nick' not in st.session_state:
     saved_nick = controller.get('user_nick')
     st.session_state.nick = saved_nick if saved_nick else ''
@@ -88,7 +88,6 @@ def sync_with_api():
                 existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
                 status = 'FT' if match.get('status') == 'FINISHED' else 'NS'
                 
-                # --- LOGIKA 90 MINUT ---
                 score = match.get('score') or {}
                 reg_time = score.get('regularTime')
                 if reg_time and reg_time.get('home') is not None:
@@ -132,7 +131,7 @@ if st.session_state.nick == '':
             res = supabase.table('gracze').select('*').eq('nick', log_nick).execute()
             if res.data and check_password(log_haslo, res.data[0].get('haslo')):
                 st.session_state.nick = log_nick
-                controller.set('user_nick', log_nick, max_age=3600*24*30)
+                controller.set('user_nick', log_nick, max_age=3600*24*30) # Ciasteczko na 30 dni
                 st.rerun()
             else: st.error("Błędny nick lub hasło!")
     with col2:
@@ -162,14 +161,12 @@ else:
     
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI: opcje.append("⚙️ Panel Admina")
-    wybor = st.radio("Nawigacja:", opcje, horizontal=True, key="nawigacja_radio")
+    wybor = st.radio("Nawigacja:", opcje, horizontal=True, key="nav")
     st.markdown("---")
 
     if wybor == "🎯 Typer":
-        st.subheader("Obstaw mecze")
         all_mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
-        # Filtrujemy tylko znane drużyny
         aktywne = [m for m in all_mecze if m['status'] != 'FT' and m['gospodarze'] != 'Nieznany']
         zakonczone = [m for m in all_mecze if m['status'] == 'FT' and m['gospodarze'] != 'Nieznany']
 
@@ -184,12 +181,6 @@ else:
                 <strong>{m['gospodarze']} vs {m['goscie']}</strong>
                 <img src="{m['logo_goscie']}" width="30"></div>""", unsafe_allow_html=True)
             st.write(f"📅 Start: {pl_time.strftime('%d.%m, %H:%M')}")
-            
-            if not is_locked:
-                time_diff = lock_time - now
-                if time_diff < timedelta(hours=24):
-                    st.warning(f"⏳ Do zamknięcia: {int(time_diff.total_seconds()//3600)}h {int((time_diff.total_seconds()%3600)//60)}m")
-            else: st.error("🔒 Zamknięte")
             
             stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
             if stary_typ: st.success(f"✅ Twój typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
@@ -208,12 +199,7 @@ else:
     elif wybor == "🏆 Ranking":
         st.subheader("🏆 Podium Typerów")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
-        ranking_data = []
-        for g in gracze:
-            typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
-            p1x2 = sum(1 for t in typy if t.get('punkty_za_mecz') == 1)
-            p3 = sum(1 for t in typy if t.get('punkty_za_mecz') == 3)
-            ranking_data.append({"Gracz": g['nick'], "Punkty": g['punkty'], "Trafione 1X2": p1x2, "Trafione dokładne": p3})
+        ranking_data = [{"Gracz": g['nick'], "Punkty": g['punkty']} for g in gracze]
         
         if len(ranking_data) >= 3:
             c1, c2, c3 = st.columns(3)
