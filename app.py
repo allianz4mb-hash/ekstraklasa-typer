@@ -140,7 +140,6 @@ else:
 
     st.title("⚽ Typer Mundialu")
     
-    # --- ADNOTACJA DLA GRACZY ---
     st.warning("⚠️ **Uwaga!** Strona jest w trakcie prac technicznych. Wyniki meczów mogą nie aktualizować się poprawnie. Zajmę się tym w wolnej chwili. Przepraszam za utrudnienia!")
     
     opcje = ["🎯 Typer", "🏆 Ranking"]
@@ -159,12 +158,4 @@ else:
         if aktywne:
             for m in aktywne:
                 mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
-                lock_time = mecz_time - timedelta(minutes=5)
-                is_locked = now >= lock_time
-                pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
-                
-                st.markdown(f'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">'
-                            f'<img src="{m["logo_gospodarze"]}" width="30">'
-                            f'<span style="font-size: 18px;"><strong>{m["gospodarze"]} vs {m["goscie"]}</strong></span>'
-                            f'<img src="{m["logo_goscie"]}" width="30">'
-                            f'
+                lock_time = mecz_time - timedelta(minutes
