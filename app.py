@@ -118,12 +118,12 @@ def get_last_sync_time():
     except: pass
     return "Brak danych"
 
-# --- NAGŁÓWEK (NOWA METODA) ---
+# --- NAGŁÓWEK ---
 def render_header():
     c1, c2 = st.columns([0.1, 0.9])
     with c1:
-        # Używamy st.image, co jest bezpieczniejsze niż HTML
-        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/FIFA_World_Cup_2026_Logo.svg/200px-FIFA_World_Cup_2026_Logo.svg.png", width=60)
+        # Próba załadowania grafiki z alternatywnego źródła
+        st.image("https://icons.iconarchive.com/icons/google/noto-emoji-activities/512/52775-soccer-ball-icon.png", width=60)
     with c2:
         st.title("Typer Mundialu")
 
