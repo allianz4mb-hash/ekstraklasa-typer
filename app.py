@@ -5,13 +5,9 @@ import bcrypt
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client, Client
-from streamlit_cookies_controller import CookieController
 
-# 1. TO MUSI BYĆ ABSOLUTNIE PIERWSZA KOMENDA STREAMLIT
+# --- KONFIGURACJA ---
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
-
-# 2. DOPIERO TERAZ INICJALIZACJA RESZTY
-controller = CookieController()
 
 def get_secret(key):
     try:
@@ -20,10 +16,9 @@ def get_secret(key):
         st.error(f"BRAKUJE SEKRETU: {key}.")
         st.stop()
 
-# Inicjalizacja sesji z ciasteczka (zapamiętanie logowania)
+# Podstawowa sesja (bez zewnętrznych bibliotek)
 if 'nick' not in st.session_state:
-    saved_nick = controller.get('user_nick')
-    st.session_state.nick = saved_nick if saved_nick else ''
+    st.session_state.nick = ''
 
 url = get_secret("SUPABASE_URL")
 key = get_secret("SUPABASE_KEY")
@@ -71,14 +66,13 @@ def sync_with_api():
     try:
         resp = requests.get(url_api, headers=headers)
         if resp.status_code != 200: 
-            return False, f"Błąd serwera API (Kod {resp.status_code}): {resp.text}"
+            return False, f"Błąd API: {resp.status_code}"
         
         data = resp.json()
         matches = data.get('matches', [])
         
         for match in matches:
             try:
-                # Bezpieczne pobieranie danych
                 home_team = match.get('homeTeam') or {}
                 away_team = match.get('awayTeam') or {}
                 
@@ -95,7 +89,7 @@ def sync_with_api():
                 
                 score = match.get('score') or {}
                 
-                # --- Wymuszanie pobrania tylko z 90 minut ---
+                # --- Wymuszanie wyniku tylko z 90 minut ---
                 reg_time = score.get('regularTime')
                 if reg_time and reg_time.get('home') is not None:
                     g_g = reg_time.get('home')
@@ -119,9 +113,9 @@ def sync_with_api():
                 continue
         
         recalculate_all_points()
-        return True, "Zaktualizowano pomyślnie i przeliczono punkty!"
+        return True, "Zaktualizowano pomyślnie!"
     except Exception as e: 
-        return False, f"Błąd w kodzie: {str(e)}"
+        return False, f"Błąd: {str(e)}"
 
 def check_and_sync():
     try:
@@ -129,7 +123,6 @@ def check_and_sync():
         if not res.data: return
         last_sync = datetime.fromisoformat(res.data[0]['ostatnia_sync'].replace('Z', '+00:00'))
         if datetime.now(timezone.utc) - last_sync > timedelta(minutes=10):
-            # Od razu nadpisujemy czas w bazie przed zapytaniem API, żeby zapobiec spamowaniu
             supabase.table("ustawienia").update({"ostatnia_sync": datetime.now(timezone.utc).isoformat()}).eq("id", 1).execute()
             sync_with_api()
     except: pass
@@ -148,7 +141,6 @@ if st.session_state.nick == '':
             res = supabase.table('gracze').select('*').eq('nick', log_nick).execute()
             if res.data and check_password(log_haslo, res.data[0].get('haslo')):
                 st.session_state.nick = log_nick
-                controller.set('user_nick', log_nick, max_age=3600*24*30)
                 st.rerun()
             else: st.error("Błędny nick lub hasło!")
     with col2:
@@ -163,13 +155,11 @@ if st.session_state.nick == '':
                 hashed_pw = hash_password(rej_haslo)
                 supabase.table('gracze').insert({'nick': clean_nick, 'haslo': hashed_pw, 'punkty': 0}).execute()
                 st.session_state.nick = clean_nick
-                controller.set('user_nick', clean_nick, max_age=3600*24*30)
                 st.rerun()
 else:
     with st.sidebar:
         st.write(f"Zalogowany: **{st.session_state.nick}**")
         if st.button("Wyloguj się"):
-            controller.remove('user_nick')
             st.session_state.nick = ''
             st.rerun()
 
@@ -177,7 +167,7 @@ else:
     
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI: opcje.append("⚙️ Panel Admina")
-    wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed", key="nawigacja_radio")
+    wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
     if wybor == "🎯 Typer":
