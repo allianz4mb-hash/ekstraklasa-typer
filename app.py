@@ -16,7 +16,7 @@ def get_secret(key):
         st.error(f"BRAKUJE SEKRETU: {key}.")
         st.stop()
 
-# LOGOWANIE PRZEZ QUERY PARAMS (Działa stabilnie przy odświeżaniu)
+# LOGOWANIE PRZEZ QUERY PARAMS
 params = st.query_params
 if 'nick' not in st.session_state:
     st.session_state.nick = params.get('nick', '')
@@ -102,7 +102,6 @@ def sync_with_api():
                 else: supabase.table("mecze").insert(dane_meczu).execute()
             except: continue
         
-        # FIX: UPSERT (wstaw lub aktualizuj) dla synchronizacji
         sync_time = datetime.now(timezone.utc).isoformat()
         supabase.table("ustawienia").upsert({"id": 1, "ostatnia_sync": sync_time}).execute()
         
@@ -131,7 +130,7 @@ if st.session_state.nick == '':
             res = supabase.table('gracze').select('*').eq('nick', log_nick).execute()
             if res.data and check_password(log_haslo, res.data[0].get('haslo')):
                 st.session_state.nick = log_nick
-                st.query_params["nick"] = log_nick # Zapisuje nick w pasku adresu
+                st.query_params["nick"] = log_nick
                 st.rerun()
             else: st.error("Błędny nick lub hasło!")
     with col2:
@@ -154,7 +153,7 @@ else:
         st.write(f"🕒 Ostatnia sync: **{get_last_sync_time()}**")
         if st.button("Wyloguj się"):
             st.session_state.nick = ''
-            st.query_params.clear() # Czyści nick z paska adresu
+            st.query_params.clear()
             st.rerun()
 
     st.title("⚽ Typer Mundialu")
@@ -206,7 +205,10 @@ else:
         if zakonczone:
             with st.expander("🏁 Zakończone mecze"):
                 for m in zakonczone:
-                    st.write(f"**{m['gospodarze']}** {m['gole_gospodarze']} : {m['gole_goscie']} **{m['goscie']}**")
+                    st.markdown(f"""<div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="{m['logo_gospodarze']}" width="20">
+                        <strong>{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}</strong>
+                        <img src="{m['logo_goscie']}" width="20"></div>""", unsafe_allow_html=True)
 
     elif wybor == "🏆 Ranking":
         st.subheader("🏆 Podium Typerów")
