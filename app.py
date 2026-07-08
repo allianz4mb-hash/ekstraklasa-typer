@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 
-# 1. KONFIGURACJA
+# 1. KONFIGURACJA STRONY - ABSOLUTNIE PIERWSZA
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
 def get_secret(key):
@@ -119,8 +119,12 @@ def get_last_sync_time():
     return "Brak danych"
 
 # --- LOGIKA GŁÓWNA ---
+# Logo Mundialu zmienna
+LOGO_URL = "https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/FIFA_World_Cup_2026_logo.svg/150px-FIFA_World_Cup_2026_logo.svg.png"
+TITLE_HTML = f"<h1 style='display: flex; align-items: center;'><img src='{LOGO_URL}' width='45' style='margin-right:15px;'> Typer Mundialu</h1>"
+
 if st.session_state.nick == '':
-    st.title("⚽ Typer Mundialu")
+    st.markdown(TITLE_HTML, unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Logowanie")
@@ -156,7 +160,7 @@ else:
             st.query_params.clear()
             st.rerun()
 
-    st.title("⚽ Typer Mundialu")
+    st.markdown(TITLE_HTML, unsafe_allow_html=True)
     
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI: opcje.append("⚙️ Panel Admina")
