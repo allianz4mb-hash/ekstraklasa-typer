@@ -83,11 +83,19 @@ def sync_with_api():
             
             status = 'FT' if match['status'] == 'FINISHED' else 'NS'
             
-            # Wymuszenie pobrania tylko z 90 minut
+            # --- ZMIANA: WYMUSZANIE 90 MINUT ---
             score = match.get('score', {})
-            full_time = score.get('fullTime', {})
-            g_g = full_time.get('home') if full_time.get('home') is not None else 0
-            g_go = full_time.get('away') if full_time.get('away') is not None else 0
+            
+            # Próbujemy pobrać wynik stricte z 90 minut (regularTime)
+            reg_time = score.get('regularTime')
+            if reg_time and reg_time.get('home') is not None:
+                g_g = reg_time.get('home')
+                g_go = reg_time.get('away')
+            else:
+                # Fallback, jeśli regularTime nie istnieje
+                full_time = score.get('fullTime', {})
+                g_g = full_time.get('home') if full_time.get('home') is not None else 0
+                g_go = full_time.get('away') if full_time.get('away') is not None else 0
             
             dane_meczu = {
                 "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
