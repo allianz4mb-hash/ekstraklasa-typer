@@ -120,13 +120,13 @@ def get_last_sync_time():
 
 # --- NAGŁÓWEK ---
 def render_header():
-    # Używamy vertical_alignment="center", żeby wyrównać logo z tekstem w pionie
-    c1, c2 = st.columns([0.1, 0.9], vertical_alignment="center")
-    with c1:
-        st.image("https://www.markt-kom.com/wp-content/uploads/2023/07/officialLogo-600x578.png", width=60)
-    with c2:
-        # Zmieniono z st.title na st.markdown, aby tekst był na środku względem logo
-        st.markdown("## Typer Mundialu")
+    # Używamy flexboxa dla precyzyjnego wyrównania logo i tytułu
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+            <img src="https://www.markt-kom.com/wp-content/uploads/2023/07/officialLogo-600x578.png" width="50">
+            <h1 style="margin: 0;">Typer Mundialu</h1>
+        </div>
+    """, unsafe_allow_html=True)
 
 # --- LOGIKA GŁÓWNA ---
 if st.session_state.nick == '':
@@ -228,13 +228,19 @@ else:
             typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
             p1x2 = sum(1 for t in typy if t.get('punkty_za_mecz') == 1)
             p3 = sum(1 for t in typy if t.get('punkty_za_mecz') == 3)
-            ranking_data.append({"Gracz": g['nick'], "Punkty": g['punkty'], "1X2": p1x2, "Dokładne": p3})
+            # Zmienione nazewnictwo kolumn na bardziej przejrzyste
+            ranking_data.append({
+                "Gracz": g['nick'], 
+                "Punktacja Ogólna": g['punkty'], 
+                "Trafione 1X2 (1 pkt)": p1x2, 
+                "Trafione Dokładne (3 pkt)": p3
+            })
         
         if len(ranking_data) >= 3:
             c1, c2, c3 = st.columns(3)
-            c1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
-            c2.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
-            c3.metric("3. Miejsce 3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punkty']} pkt")
+            c1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punktacja Ogólna']} pkt")
+            c2.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punktacja Ogólna']} pkt")
+            c3.metric("3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punktacja Ogólna']} pkt")
         st.table(pd.DataFrame(ranking_data))
 
     elif wybor == "⚙️ Panel Admina":
