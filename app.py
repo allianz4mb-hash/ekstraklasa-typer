@@ -69,44 +69,60 @@ def sync_with_api():
     headers = {"X-Auth-Token": API_KEY}
     try:
         resp = requests.get(url_api, headers=headers)
-        if resp.status_code != 200: return False
+        if resp.status_code != 200: 
+            return False, f"Błąd serwera API (Kod {resp.status_code}): {resp.text}"
+        
         data = resp.json()
         matches = data.get('matches', [])
         
         for match in matches:
-            gosp = match['homeTeam']['name']
-            gosc = match['awayTeam']['name']
-            logo_g = match['homeTeam'].get('crest')
-            logo_go = match['awayTeam'].get('crest')
-            data_str = match['utcDate']
-            existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
-            
-            status = 'FT' if match['status'] == 'FINISHED' else 'NS'
-            
-            # --- ZMIANA: WYMUSZANIE 90 MINUT ---
-            score = match.get('score', {})
-            
-            # Próbujemy pobrać wynik stricte z 90 minut (regularTime)
-            reg_time = score.get('regularTime')
-            if reg_time and reg_time.get('home') is not None:
-                g_g = reg_time.get('home')
-                g_go = reg_time.get('away')
-            else:
-                # Fallback, jeśli regularTime nie istnieje
-                full_time = score.get('fullTime', {})
-                g_g = full_time.get('home') if full_time.get('home') is not None else 0
-                g_go = full_time.get('away') if full_time.get('away') is not None else 0
-            
-            dane_meczu = {
-                "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
-                "data_meczu": data_str, "status": status, "gole_gospodarze": g_g, "gole_goscie": g_go, "kolejka": 1
-            }
-            if existing: supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
-            else: supabase.table("mecze").insert(dane_meczu).execute()
+            try:
+                # Bezpieczne pobieranie danych (zabezpieczenie przed pustymi polami)
+                home_team = match.get('homeTeam') or {}
+                away_team = match.get('awayTeam') or {}
+                
+                gosp = home_team.get('name') or "Nieznany"
+                gosc = away_team.get('name') or "Nieznany"
+                
+                logo_g = home_team.get('crest')
+                logo_go = away_team.get('crest')
+                data_str = match.get('utcDate')
+                
+                existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
+                
+                status = 'FT' if match.get('status') == 'FINISHED' else 'NS'
+                
+                score = match.get('score') or {}
+                
+                # --- Wymuszanie pobrania tylko z 90 minut ---
+                reg_time = score.get('regularTime')
+                if reg_time and reg_time.get('home') is not None:
+                    g_g = reg_time.get('home')
+                    g_go = reg_time.get('away')
+                else:
+                    # Fallback
+                    full_time = score.get('fullTime') or {}
+                    g_g = full_time.get('home') if full_time.get('home') is not None else 0
+                    g_go = full_time.get('away') if full_time.get('away') is not None else 0
+                
+                dane_meczu = {
+                    "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
+                    "data_meczu": data_str, "status": status, "gole_gospodarze": g_g, "gole_goscie": g_go, "kolejka": 1
+                }
+                
+                if existing: 
+                    supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
+                else: 
+                    supabase.table("mecze").insert(dane_meczu).execute()
+                    
+            except Exception as inner_e:
+                # Jeśli wywali się jeden mecz, zignoruj go i synchronizuj resztę
+                continue
         
         recalculate_all_points()
-        return True
-    except: return False
+        return True, "Zaktualizowano pomyślnie i przeliczono punkty!"
+    except Exception as e: 
+        return False, f"Błąd w kodzie: {str(e)}"
 
 def check_and_sync():
     try:
@@ -114,8 +130,9 @@ def check_and_sync():
         if not res.data: return
         last_sync = datetime.fromisoformat(res.data[0]['ostatnia_sync'].replace('Z', '+00:00'))
         if datetime.now(timezone.utc) - last_sync > timedelta(minutes=10):
-            if sync_with_api():
-                supabase.table("ustawienia").update({"ostatnia_sync": datetime.now(timezone.utc).isoformat()}).eq("id", 1).execute()
+            # Od razu nadpisujemy czas w bazie przed zapytaniem API, żeby zapobiec spamowaniu
+            supabase.table("ustawienia").update({"ostatnia_sync": datetime.now(timezone.utc).isoformat()}).eq("id", 1).execute()
+            sync_with_api()
     except: pass
 
 # --- LOGIKA GŁÓWNA ---
@@ -181,7 +198,6 @@ else:
                 is_locked = now >= lock_time
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
                 
-                # HTML z logo
                 st.markdown(f"""
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
                     <img src="{m['logo_gospodarze']}" width="30">
@@ -255,10 +271,12 @@ else:
         st.subheader("Zarządzanie")
         if st.button("🔄 RĘCZNA SYNCHRONIZACJA"):
             with st.spinner("Pobieram dane i przeliczam..."):
-                if sync_with_api():
-                    st.success("Synchronizacja udana!")
+                sukces, wiadomosc = sync_with_api()
+                if sukces:
+                    st.success(wiadomosc)
                 else:
-                    st.error("Błąd połączenia z API.")
+                    # Teraz komunikat pokaże dokładną przyczynę problemu!
+                    st.error(f"Nie udało się: {wiadomosc}")
         
         if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW"):
             recalculate_all_points()
