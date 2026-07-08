@@ -37,13 +37,33 @@ def oblicz_punkty(typ_g, typ_go, real_g, real_go):
     return 0
 
 def recalculate_all_points():
-    matches = supabase.table("mecze").select("id").execute().data
-    valid_match_ids = [m['id'] for m in matches]
+    # Pobierz wszystkie mecze
+    matches = supabase.table("mecze").select("*").execute().data
+    matches_dict = {m['id']: m for m in matches}
+    
+    # Pobierz wszystkich graczy
     players = supabase.table("gracze").select("nick").execute().data
+    
     for p in players:
-        typy = supabase.table("typy").select("punkty_za_mecz, mecz_id").eq("nick", p['nick']).execute().data
-        total = sum(t['punkty_za_mecz'] for t in typy if t['mecz_id'] in valid_match_ids and t['punkty_za_mecz'] is not None)
-        supabase.table("gracze").update({"punkty": total}).eq("nick", p['nick']).execute()
+        nick = p['nick']
+        total_points = 0
+        
+        # Pobierz wszystkie typy tego gracza
+        typy = supabase.table("typy").select("*").eq("nick", nick).execute().data
+        
+        for t in typy:
+            mecz = matches_dict.get(t['mecz_id'])
+            if mecz and mecz['status'] == 'FT':
+                # Oblicz i zapisz punkty dla tego meczu
+                pkt = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], mecz['gole_gospodarze'], mecz['gole_goscie'])
+                supabase.table("typy").update({"punkty_za_mecz": pkt}).eq("id", t['id']).execute()
+                total_points += pkt
+            else:
+                # Jeśli mecz się jeszcze nie skończył, zresetuj lub zostaw 0
+                supabase.table("typy").update({"punkty_za_mecz": 0}).eq("id", t['id']).execute()
+        
+        # Zaktualizuj sumę w tabeli gracze
+        supabase.table("gracze").update({"punkty": total_points}).eq("nick", nick).execute()
 
 def sync_with_api():
     url_api = "https://api.football-data.org/v4/competitions/WC/matches"
@@ -60,9 +80,11 @@ def sync_with_api():
             logo_go = match['awayTeam'].get('crest')
             data_str = match['utcDate']
             existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
+            
             status = 'FT' if match['status'] == 'FINISHED' else 'NS'
             g_g = match['score']['fullTime']['home'] if match['score']['fullTime']['home'] is not None else 0
             g_go = match['score']['fullTime']['away'] if match['score']['fullTime']['away'] is not None else 0
+            
             dane_meczu = {
                 "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
                 "data_meczu": data_str, "status": status, "gole_gospodarze": g_g, "gole_goscie": g_go, "kolejka": 1
@@ -76,6 +98,7 @@ def sync_with_api():
 def check_and_sync():
     try:
         res = supabase.table("ustawienia").select("ostatnia_sync").eq("id", 1).execute()
+        if not res.data: return
         last_sync = datetime.fromisoformat(res.data[0]['ostatnia_sync'].replace('Z', '+00:00'))
         if datetime.now(timezone.utc) - last_sync > timedelta(minutes=10):
             if sync_with_api():
@@ -83,10 +106,9 @@ def check_and_sync():
     except: pass
 
 # --- GŁÓWNA LOGIKA ---
-check_and_sync() # AUTOMATYCZNE SPRAWDZENIE PRZY KAŻDYM WEJŚCIU
+check_and_sync()
 
 if st.session_state.nick == '':
-    # ... (kod logowania i rejestracji bez zmian) ...
     st.title("⚽ Typer Mundialu")
     col1, col2 = st.columns(2)
     with col1:
@@ -113,7 +135,6 @@ if st.session_state.nick == '':
                 st.session_state.nick = clean_nick
                 st.rerun()
 else:
-    # ... (reszta kodu: Typer, Ranking, Admin - pozostaje bez zmian) ...
     with st.sidebar:
         st.write(f"Zalogowany: **{st.session_state.nick}**")
         if st.button("Wyloguj się"):
@@ -129,10 +150,8 @@ else:
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
         st.info("ℹ️ Typy można zapisywać i edytować do 5 minut przed rozpoczęciem meczu.")
-        
         all_mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
-        
         aktywne = [m for m in all_mecze if m['status'] != 'FT']
         zakonczone = [m for m in all_mecze if m['status'] == 'FT']
 
