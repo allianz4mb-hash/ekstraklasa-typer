@@ -5,13 +5,9 @@ import bcrypt
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client, Client
-from streamlit_cookies_controller import CookieController
 
-# 1. KONFIGURACJA STRONY - ABSOLUTNIE PIERWSZA
+# 1. KONFIGURACJA
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
-
-# 2. INICJALIZACJA KONTROLERA CIASTECZEK - DRUGA
-controller = CookieController()
 
 def get_secret(key):
     try:
@@ -20,10 +16,10 @@ def get_secret(key):
         st.error(f"BRAKUJE SEKRETU: {key}.")
         st.stop()
 
-# Inicjalizacja sesji z ciasteczka
+# LOGOWANIE PRZEZ QUERY PARAMS (Działa stabilnie przy odświeżaniu)
+params = st.query_params
 if 'nick' not in st.session_state:
-    saved_nick = controller.get('user_nick')
-    st.session_state.nick = saved_nick if saved_nick else ''
+    st.session_state.nick = params.get('nick', '')
 
 url = get_secret("SUPABASE_URL")
 key = get_secret("SUPABASE_KEY")
@@ -106,7 +102,10 @@ def sync_with_api():
                 else: supabase.table("mecze").insert(dane_meczu).execute()
             except: continue
         
-        supabase.table("ustawienia").update({"ostatnia_sync": datetime.now(timezone.utc).isoformat()}).eq("id", 1).execute()
+        # FIX: UPSERT (wstaw lub aktualizuj) dla synchronizacji
+        sync_time = datetime.now(timezone.utc).isoformat()
+        supabase.table("ustawienia").upsert({"id": 1, "ostatnia_sync": sync_time}).execute()
+        
         recalculate_all_points()
         return True, "Zaktualizowano!"
     except Exception as e: return False, str(e)
@@ -132,7 +131,7 @@ if st.session_state.nick == '':
             res = supabase.table('gracze').select('*').eq('nick', log_nick).execute()
             if res.data and check_password(log_haslo, res.data[0].get('haslo')):
                 st.session_state.nick = log_nick
-                controller.set('user_nick', log_nick, max_age=3600*24*30)
+                st.query_params["nick"] = log_nick # Zapisuje nick w pasku adresu
                 st.rerun()
             else: st.error("Błędny nick lub hasło!")
     with col2:
@@ -147,15 +146,15 @@ if st.session_state.nick == '':
                 hashed_pw = hash_password(rej_haslo)
                 supabase.table('gracze').insert({'nick': clean_nick, 'haslo': hashed_pw, 'punkty': 0}).execute()
                 st.session_state.nick = clean_nick
-                controller.set('user_nick', clean_nick, max_age=3600*24*30)
+                st.query_params["nick"] = clean_nick
                 st.rerun()
 else:
     with st.sidebar:
         st.write(f"Zalogowany: **{st.session_state.nick}**")
         st.write(f"🕒 Ostatnia sync: **{get_last_sync_time()}**")
         if st.button("Wyloguj się"):
-            controller.remove('user_nick')
             st.session_state.nick = ''
+            st.query_params.clear() # Czyści nick z paska adresu
             st.rerun()
 
     st.title("⚽ Typer Mundialu")
@@ -204,7 +203,6 @@ else:
                 st.rerun()
             st.markdown("---")
         
-        # PRZYWRÓCONA SEKCJA ZAKOŃCZONYCH
         if zakonczone:
             with st.expander("🏁 Zakończone mecze"):
                 for m in zakonczone:
