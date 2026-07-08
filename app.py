@@ -120,12 +120,13 @@ def get_last_sync_time():
 
 # --- NAGŁÓWEK ---
 def render_header():
-    c1, c2 = st.columns([0.1, 0.9])
+    # Używamy vertical_alignment="center", żeby wyrównać logo z tekstem w pionie
+    c1, c2 = st.columns([0.1, 0.9], vertical_alignment="center")
     with c1:
-        # Podmieniony link na ten od Ciebie
         st.image("https://www.markt-kom.com/wp-content/uploads/2023/07/officialLogo-600x578.png", width=60)
     with c2:
-        st.title("Typer Mundialu")
+        # Zmieniono z st.title na st.markdown, aby tekst był na środku względem logo
+        st.markdown("## Typer Mundialu")
 
 # --- LOGIKA GŁÓWNA ---
 if st.session_state.nick == '':
@@ -233,7 +234,7 @@ else:
             c1, c2, c3 = st.columns(3)
             c1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
             c2.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
-            c3.metric("3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punkty']} pkt")
+            c3.metric("3. Miejsce 3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punkty']} pkt")
         st.table(pd.DataFrame(ranking_data))
 
     elif wybor == "⚙️ Panel Admina":
