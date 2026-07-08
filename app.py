@@ -19,7 +19,6 @@ st.set_page_config(page_title="Typer Mundialu", layout="wide")
 # --- TRYB SERWISOWY ---
 st.error("⚠️ Uwaga! Strona w trakcie prac technicznych.")
 st.write("Wystąpił problem z aktualizacją wyników meczów. Zajmę się tym w wolnej chwili. Przepraszam za utrudnienia!")
-st.stop()
 
 # Poniżej znajduje się reszta kodu, która nie uruchomi się dopóki nie usuniesz powyższego st.stop()
 url = get_secret("SUPABASE_URL")
