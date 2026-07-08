@@ -32,6 +32,7 @@ def check_password(password, hashed):
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 def oblicz_punkty(typ_g, typ_go, real_g, real_go):
+    # Logika punktowania: 3 pkt za dokładny wynik, 1 pkt za trafienie rezultatu (1X2)
     if typ_g == real_g and typ_go == real_go: return 3
     elif (typ_g > typ_go and real_g > real_go) or (typ_g < typ_go and real_g < real_go) or (typ_g == typ_go and real_g == real_go): return 1
     return 0
@@ -40,18 +41,22 @@ def recalculate_all_points():
     matches = supabase.table("mecze").select("*").execute().data
     matches_dict = {m['id']: m for m in matches}
     players = supabase.table("gracze").select("nick").execute().data
+    
     for p in players:
         nick = p['nick']
         total_points = 0
         typy = supabase.table("typy").select("*").eq("nick", nick).execute().data
+        
         for t in typy:
             mecz = matches_dict.get(t['mecz_id'])
+            # Przeliczamy tylko, jeśli mecz jest zakończony (FT)
             if mecz and mecz['status'] == 'FT':
                 pkt = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], mecz['gole_gospodarze'], mecz['gole_goscie'])
                 supabase.table("typy").update({"punkty_za_mecz": pkt}).eq("id", t['id']).execute()
                 total_points += pkt
             else:
                 supabase.table("typy").update({"punkty_za_mecz": 0}).eq("id", t['id']).execute()
+        
         supabase.table("gracze").update({"punkty": total_points}).eq("nick", nick).execute()
 
 def sync_with_api():
@@ -62,6 +67,7 @@ def sync_with_api():
         if resp.status_code != 200: return False
         data = resp.json()
         matches = data.get('matches', [])
+        
         for match in matches:
             gosp = match['homeTeam']['name']
             gosc = match['awayTeam']['name']
@@ -72,11 +78,15 @@ def sync_with_api():
             
             status = 'FT' if match['status'] == 'FINISHED' else 'NS'
             
-            # Wymuszenie pobrania tylko fullTime (90 minut)
+            # Pobieramy wynik z pola fullTime (regulaminowe 90 minut)
             score = match.get('score', {})
             full_time = score.get('fullTime', {})
-            g_g = full_time.get('home') if full_time.get('home') is not None else 0
-            g_go = full_time.get('away') if full_time.get('away') is not None else 0
+            g_g = full_time.get('home')
+            g_go = full_time.get('away')
+            
+            # Jeśli fullTime jest None, ustawiamy 0 (zapobiega błędom)
+            if g_g is None: g_g = 0
+            if g_go is None: g_go = 0
             
             dane_meczu = {
                 "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
@@ -84,6 +94,7 @@ def sync_with_api():
             }
             if existing: supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
             else: supabase.table("mecze").insert(dane_meczu).execute()
+        
         recalculate_all_points()
         return True
     except: return False
@@ -154,6 +165,7 @@ else:
                 lock_time = mecz_time - timedelta(minutes=5)
                 is_locked = now >= lock_time
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
+                
                 st.markdown(f'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">'
                             f'<img src="{m["logo_gospodarze"]}" width="30">'
                             f'<span style="font-size: 18px;"><strong>{m["gospodarze"]} vs {m["goscie"]}</strong></span>'
