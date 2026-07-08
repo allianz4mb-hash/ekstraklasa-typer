@@ -65,69 +65,79 @@ def sync_with_api():
     url_api = "https://api.football-data.org/v4/competitions/WC/matches"
     headers = {"X-Auth-Token": API_KEY}
     try:
-        resp = requests.get(url_api, headers=headers, timeout=10)
-        if resp.status_code != 200: return False, f"Błąd API: {resp.status_code}"
-        
-        data = resp.json()
-        matches = data.get('matches', [])
-        
-        for match in matches:
-            try:
-                home_team = match.get('homeTeam') or {}
-                away_team = match.get('awayTeam') or {}
-                gosp = home_team.get('name') or "Nieznany"
-                gosc = away_team.get('name') or "Nieznany"
-                logo_g = home_team.get('crest')
-                logo_go = away_team.get('crest')
-                data_str = match.get('utcDate')
-                
-                existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
-                status = 'FT' if match.get('status') == 'FINISHED' else 'NS'
-                
-                score = match.get('score') or {}
-                reg_time = score.get('regularTime')
-                if reg_time and reg_time.get('home') is not None:
-                    g_g, g_go = reg_time.get('home'), reg_time.get('away')
-                else:
-                    full_time = score.get('fullTime') or {}
-                    g_g = full_time.get('home') if full_time.get('home') is not None else 0
-                    g_go = full_time.get('away') if full_time.get('away') is not None else 0
-                
-                dane_meczu = {
-                    "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
-                    "data_meczu": data_str, "status": status, "gole_gospodarze": g_g, "gole_goscie": g_go, "kolejka": 1
-                }
-                
-                if existing: supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
-                else: supabase.table("mecze").insert(dane_meczu).execute()
-            except: continue
-        
-        sync_time = datetime.now(timezone.utc).isoformat()
-        supabase.table("ustawienia").upsert({"id": 1, "ostatnia_sync": sync_time}).execute()
-        
-        recalculate_all_points()
-        return True, "Zaktualizowano!"
+        # Wizualny "impuls"
+        with st.spinner("Synchronizacja danych z API..."):
+            resp = requests.get(url_api, headers=headers, timeout=10)
+            if resp.status_code != 200: return False, f"Błąd API: {resp.status_code}"
+            
+            data = resp.json()
+            matches = data.get('matches', [])
+            
+            for match in matches:
+                try:
+                    home_team = match.get('homeTeam') or {}
+                    away_team = match.get('awayTeam') or {}
+                    gosp = home_team.get('name') or "Nieznany"
+                    gosc = away_team.get('name') or "Nieznany"
+                    logo_g = home_team.get('crest')
+                    logo_go = away_team.get('crest')
+                    data_str = match.get('utcDate')
+                    
+                    existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
+                    status = 'FT' if match.get('status') == 'FINISHED' else 'NS'
+                    
+                    score = match.get('score') or {}
+                    reg_time = score.get('regularTime')
+                    if reg_time and reg_time.get('home') is not None:
+                        g_g, g_go = reg_time.get('home'), reg_time.get('away')
+                    else:
+                        full_time = score.get('fullTime') or {}
+                        g_g = full_time.get('home') if full_time.get('home') is not None else 0
+                        g_go = full_time.get('away') if full_time.get('away') is not None else 0
+                    
+                    dane_meczu = {
+                        "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
+                        "data_meczu": data_str, "status": status, "gole_gospodarze": g_g, "gole_goscie": g_go, "kolejka": 1
+                    }
+                    
+                    if existing: supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
+                    else: supabase.table("mecze").insert(dane_meczu).execute()
+                except: continue
+            
+            sync_time = datetime.now(timezone.utc).isoformat()
+            supabase.table("ustawienia").upsert({"id": 1, "ostatnia_sync": sync_time}).execute()
+            
+            recalculate_all_points()
+            return True, "Zaktualizowano!"
     except Exception as e: return False, str(e)
 
 # Funkcja do sprawdzania czy trzeba zrobić sync
 def check_and_sync():
     try:
         res = supabase.table("ustawienia").select("ostatnia_sync").eq("id", 1).execute()
-        # Jeśli nie ma ustawień, to synchronizuj
+        
+        # Jeśli nie ma ustawień w bazie
         if not res.data:
+            st.info("Pierwsza synchronizacja...")
             sync_with_api()
             return
         
         last_sync_str = res.data[0].get('ostatnia_sync')
-        if not last_sync_str:
-            sync_with_api()
-            return
-
         last_sync = datetime.fromisoformat(last_sync_str.replace('Z', '+00:00'))
-        # Synchronizacja co 30 minut
-        if datetime.now(timezone.utc) - last_sync > timedelta(minutes=30):
-            sync_with_api()
-    except: pass
+        
+        diff = datetime.now(timezone.utc) - last_sync
+        
+        # DEBUG (widoczne w bocznej kolumnie)
+        st.sidebar.info(f"Debug: Od sync minęło {int(diff.total_seconds()//60)} minut")
+        
+        if diff > timedelta(minutes=30):
+            success, message = sync_with_api()
+            if not success:
+                st.error(f"Błąd auto-sync: {message}")
+            else:
+                st.success("Automatyczna synchronizacja zakończona!")
+    except Exception as e:
+        st.sidebar.error(f"Błąd sprawdzania sync: {e}")
 
 def get_last_sync_time():
     try:
@@ -138,7 +148,7 @@ def get_last_sync_time():
     except: pass
     return "Brak danych"
 
-# Uruchamiamy synchronizację automatyczną przy wczytaniu strony
+# Uruchamiamy synchronizację (wywoła się po załadowaniu strony)
 check_and_sync()
 
 # --- NAGŁÓWEK ---
@@ -149,7 +159,6 @@ def render_header():
             <h1 style="margin: 0;">FIFA World Cup 2026</h1>
         </div>
     """, unsafe_allow_html=True)
-    # Zegar synchronizacji pod tytułem
     st.caption(f"🕒 Ostatnia automatyczna synchronizacja: **{get_last_sync_time()}**")
 
 # --- LOGIKA GŁÓWNA ---
