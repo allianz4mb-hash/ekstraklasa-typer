@@ -122,8 +122,8 @@ def get_last_sync_time():
 def render_header():
     c1, c2 = st.columns([0.1, 0.9])
     with c1:
-        # Logo z linku od Ciebie
-        st.image("https://www.footylogos.com/logos/fifa-world-cup-2026", width=60)
+        # Podmieniony link na ten od Ciebie
+        st.image("https://www.markt-kom.com/wp-content/uploads/2023/07/officialLogo-600x578.png", width=60)
     with c2:
         st.title("Typer Mundialu")
 
