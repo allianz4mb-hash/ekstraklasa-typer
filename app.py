@@ -20,7 +20,7 @@ def get_secret(key):
         st.error(f"BRAKUJE SEKRETU: {key}.")
         st.stop()
 
-# Inicjalizacja sesji z ciasteczka (zapamiętanie logowania)
+# Inicjalizacja sesji z ciasteczka
 if 'nick' not in st.session_state:
     saved_nick = controller.get('user_nick')
     st.session_state.nick = saved_nick if saved_nick else ''
@@ -106,7 +106,6 @@ def sync_with_api():
                 else: supabase.table("mecze").insert(dane_meczu).execute()
             except: continue
         
-        # Aktualizacja czasu ostatniej sync w DB
         supabase.table("ustawienia").update({"ostatnia_sync": datetime.now(timezone.utc).isoformat()}).eq("id", 1).execute()
         recalculate_all_points()
         return True, "Zaktualizowano!"
@@ -170,7 +169,6 @@ else:
         st.subheader("Obstaw mecze")
         all_mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
-        # FILTR: ukrywamy mecze z "Nieznany"
         aktywne = [m for m in all_mecze if m['status'] != 'FT' and m['gospodarze'] != 'Nieznany']
         zakonczone = [m for m in all_mecze if m['status'] == 'FT' and m['gospodarze'] != 'Nieznany']
 
@@ -205,6 +203,12 @@ else:
                 else: supabase.table("typy").insert(dane).execute()
                 st.rerun()
             st.markdown("---")
+        
+        # PRZYWRÓCONA SEKCJA ZAKOŃCZONYCH
+        if zakonczone:
+            with st.expander("🏁 Zakończone mecze"):
+                for m in zakonczone:
+                    st.write(f"**{m['gospodarze']}** {m['gole_gospodarze']} : {m['gole_goscie']} **{m['goscie']}**")
 
     elif wybor == "🏆 Ranking":
         st.subheader("🏆 Podium Typerów")
