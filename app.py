@@ -7,10 +7,10 @@ from zoneinfo import ZoneInfo
 from supabase import create_client, Client
 from streamlit_cookies_controller import CookieController
 
-# 1. KONFIGURACJA STRONY - MUSI BYĆ PIERWSZA
+# 1. KONFIGURACJA STRONY - ABSOLUTNIE PIERWSZA
 st.set_page_config(page_title="Typer Mundialu", layout="wide")
 
-# 2. INICJALIZACJA KONTROLERA CIASTECZEK - DRUGA
+# 2. KONTROLER CIASTECZEK - DRUGI
 controller = CookieController()
 
 def get_secret(key):
@@ -20,7 +20,7 @@ def get_secret(key):
         st.error(f"BRAKUJE SEKRETU: {key}.")
         st.stop()
 
-# Inicjalizacja sesji z ciasteczka
+# Inicjalizacja sesji
 if 'nick' not in st.session_state:
     saved_nick = controller.get('user_nick')
     st.session_state.nick = saved_nick if saved_nick else ''
@@ -88,11 +88,11 @@ def sync_with_api():
                 existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
                 status = 'FT' if match.get('status') == 'FINISHED' else 'NS'
                 
+                # --- LOGIKA 90 MINUT ---
                 score = match.get('score') or {}
                 reg_time = score.get('regularTime')
                 if reg_time and reg_time.get('home') is not None:
-                    g_g = reg_time.get('home')
-                    g_go = reg_time.get('away')
+                    g_g, g_go = reg_time.get('home'), reg_time.get('away')
                 else:
                     full_time = score.get('fullTime') or {}
                     g_g = full_time.get('home') if full_time.get('home') is not None else 0
@@ -105,35 +105,22 @@ def sync_with_api():
                 
                 if existing: supabase.table("mecze").update(dane_meczu).eq("id", existing[0]['id']).execute()
                 else: supabase.table("mecze").insert(dane_meczu).execute()
-            except Exception: continue
+            except: continue
         
         recalculate_all_points()
-        return True, "Zaktualizowano pomyślnie!"
+        return True, "Zaktualizowano!"
     except Exception as e: return False, str(e)
 
 def get_last_sync_time():
     try:
         res = supabase.table("ustawienia").select("ostatnia_sync").eq("id", 1).execute()
-        if res.data:
+        if res.data and res.data[0].get('ostatnia_sync'):
             dt = datetime.fromisoformat(res.data[0]['ostatnia_sync'].replace('Z', '+00:00'))
             return dt.astimezone(ZoneInfo("Europe/Warsaw")).strftime('%d.%m %H:%M')
     except: pass
     return "Brak danych"
 
-# --- LOGIKA GŁÓWNA ---
-# Sprawdzamy sync w tle (nie blokuje strony, bo API jest szybkie)
-def check_and_sync():
-    try:
-        res = supabase.table("ustawienia").select("ostatnia_sync").eq("id", 1).execute()
-        if not res.data: return
-        last_sync = datetime.fromisoformat(res.data[0]['ostatnia_sync'].replace('Z', '+00:00'))
-        if datetime.now(timezone.utc) - last_sync > timedelta(minutes=10):
-            supabase.table("ustawienia").update({"ostatnia_sync": datetime.now(timezone.utc).isoformat()}).eq("id", 1).execute()
-            sync_with_api()
-    except: pass
-
-check_and_sync()
-
+# --- LOGIKA ---
 if st.session_state.nick == '':
     st.title("⚽ Typer Mundialu")
     col1, col2 = st.columns(2)
@@ -172,60 +159,74 @@ else:
             st.rerun()
 
     st.title("⚽ Typer Mundialu")
+    
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI: opcje.append("⚙️ Panel Admina")
-    wybor = st.radio("Nawigacja:", opcje, horizontal=True, label_visibility="collapsed", key="nav")
+    wybor = st.radio("Nawigacja:", opcje, horizontal=True, key="nawigacja_radio")
     st.markdown("---")
 
     if wybor == "🎯 Typer":
         st.subheader("Obstaw mecze")
         all_mecze = supabase.table("mecze").select("*").order("data_meczu").execute().data
         now = datetime.now(timezone.utc)
-        
-        # Filtrujemy tylko te, gdzie drużyny są znane
+        # Filtrujemy tylko znane drużyny
         aktywne = [m for m in all_mecze if m['status'] != 'FT' and m['gospodarze'] != 'Nieznany']
         zakonczone = [m for m in all_mecze if m['status'] == 'FT' and m['gospodarze'] != 'Nieznany']
 
-        if aktywne:
-            for m in aktywne:
-                mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
-                lock_time = mecz_time - timedelta(minutes=5)
-                is_locked = now >= lock_time
-                pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
-                
-                st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                    <img src="{m['logo_gospodarze']}" width="30">
-                    <span style="font-size: 18px;"><strong>{m['gospodarze']} vs {m['goscie']}</strong></span>
-                    <img src="{m['logo_goscie']}" width="30">
-                </div>
-                """, unsafe_allow_html=True)
-                st.write(f"📅 Start (PL): {pl_time.strftime('%d.%m, %H:%M')}")
-                
-                stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
-                c1, c2 = st.columns(2)
-                g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(stary_typ[0]['typ_gospodarze']) if stary_typ else 0, key=f"g_{m['id']}", disabled=is_locked)
-                go = c2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(stary_typ[0]['typ_goscie']) if stary_typ else 0, key=f"go_{m['id']}", disabled=is_locked)
-                
-                if not is_locked and st.button("Zapisz", key=f"btn_{m['id']}"):
-                    dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
-                    if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
-                    else: supabase.table("typy").insert(dane).execute()
-                    st.rerun()
-                st.markdown("---")
-        
-        if zakonczone:
-            with st.expander("🏁 Zakończone"):
-                for m in zakonczone:
-                    st.write(f"{m['gospodarze']} {m['gole_gospodarze']} : {m['gole_goscie']} {m['goscie']}")
+        for m in aktywne:
+            mecz_time = datetime.fromisoformat(m['data_meczu'].replace('Z', '+00:00'))
+            lock_time = mecz_time - timedelta(minutes=5)
+            is_locked = now >= lock_time
+            pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
+            
+            st.markdown(f"""<div style="display: flex; align-items: center; gap: 10px;">
+                <img src="{m['logo_gospodarze']}" width="30">
+                <strong>{m['gospodarze']} vs {m['goscie']}</strong>
+                <img src="{m['logo_goscie']}" width="30"></div>""", unsafe_allow_html=True)
+            st.write(f"📅 Start: {pl_time.strftime('%d.%m, %H:%M')}")
+            
+            if not is_locked:
+                time_diff = lock_time - now
+                if time_diff < timedelta(hours=24):
+                    st.warning(f"⏳ Do zamknięcia: {int(time_diff.total_seconds()//3600)}h {int((time_diff.total_seconds()%3600)//60)}m")
+            else: st.error("🔒 Zamknięte")
+            
+            stary_typ = supabase.table("typy").select("*").eq("nick", st.session_state.nick).eq("mecz_id", m['id']).execute().data
+            if stary_typ: st.success(f"✅ Twój typ: {stary_typ[0]['typ_gospodarze']} : {stary_typ[0]['typ_goscie']}")
+            
+            c1, c2 = st.columns(2)
+            g = c1.number_input(f"Gole {m['gospodarze']}", 0, 10, value=int(stary_typ[0]['typ_gospodarze']) if stary_typ else 0, key=f"g_{m['id']}", disabled=is_locked)
+            go = c2.number_input(f"Gole {m['goscie']}", 0, 10, value=int(stary_typ[0]['typ_goscie']) if stary_typ else 0, key=f"go_{m['id']}", disabled=is_locked)
+            
+            if not is_locked and st.button("Zapisz", key=f"btn_{m['id']}"):
+                dane = {"nick": st.session_state.nick, "mecz_id": m['id'], "typ_gospodarze": g, "typ_goscie": go, "rozliczony": False}
+                if stary_typ: supabase.table("typy").update(dane).eq("id", stary_typ[0]['id']).execute()
+                else: supabase.table("typy").insert(dane).execute()
+                st.rerun()
+            st.markdown("---")
 
     elif wybor == "🏆 Ranking":
         st.subheader("🏆 Podium Typerów")
         gracze = supabase.table("gracze").select("nick, punkty").order("punkty", desc=True).execute().data
-        st.table(pd.DataFrame(gracze))
+        ranking_data = []
+        for g in gracze:
+            typy = supabase.table("typy").select("punkty_za_mecz").eq("nick", g['nick']).execute().data
+            p1x2 = sum(1 for t in typy if t.get('punkty_za_mecz') == 1)
+            p3 = sum(1 for t in typy if t.get('punkty_za_mecz') == 3)
+            ranking_data.append({"Gracz": g['nick'], "Punkty": g['punkty'], "Trafione 1X2": p1x2, "Trafione dokładne": p3})
+        
+        if len(ranking_data) >= 3:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("1. Miejsce 🥇", ranking_data[0]['Gracz'], f"{ranking_data[0]['Punkty']} pkt")
+            c2.metric("2. Miejsce 🥈", ranking_data[1]['Gracz'], f"{ranking_data[1]['Punkty']} pkt")
+            c3.metric("3. Miejsce 🥉", ranking_data[2]['Gracz'], f"{ranking_data[2]['Punkty']} pkt")
+        st.table(pd.DataFrame(ranking_data))
 
     elif wybor == "⚙️ Panel Admina":
         if st.button("🔄 RĘCZNA SYNC"):
-            sukces, msg = sync_with_api()
-            if sukces: st.success(msg)
-            else: st.error(msg)
+            s, m = sync_with_api()
+            if s: st.success(m)
+            else: st.error(m)
+        if st.button("🛡️ PEŁNA NAPRAWA PUNKTÓW"):
+            recalculate_all_points()
+            st.success("Przeliczono!")
