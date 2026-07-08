@@ -3,3 +3,4 @@ supabase
 requests
 beautifulsoup4
 bcrypt
+streamlit-cookies-controller
