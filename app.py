@@ -118,13 +118,18 @@ def get_last_sync_time():
     except: pass
     return "Brak danych"
 
-# --- LOGIKA GŁÓWNA ---
-# Logo Mundialu (adres z Wikimedia Commons)
-LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/FIFA_World_Cup_2026_Logo.svg/200px-FIFA_World_Cup_2026_Logo.svg.png"
-TITLE_HTML = f"<h1 style='display: flex; align-items: center;'><img src='{LOGO_URL}' width='50' style='margin-right:15px;'> Typer Mundialu</h1>"
+# --- NAGŁÓWEK (NOWA METODA) ---
+def render_header():
+    c1, c2 = st.columns([0.1, 0.9])
+    with c1:
+        # Używamy st.image, co jest bezpieczniejsze niż HTML
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/FIFA_World_Cup_2026_Logo.svg/200px-FIFA_World_Cup_2026_Logo.svg.png", width=60)
+    with c2:
+        st.title("Typer Mundialu")
 
+# --- LOGIKA GŁÓWNA ---
 if st.session_state.nick == '':
-    st.markdown(TITLE_HTML, unsafe_allow_html=True)
+    render_header()
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Logowanie")
@@ -160,7 +165,7 @@ else:
             st.query_params.clear()
             st.rerun()
 
-    st.markdown(TITLE_HTML, unsafe_allow_html=True)
+    render_header()
     
     opcje = ["🎯 Typer", "🏆 Ranking"]
     if st.session_state.nick in ADMINI: opcje.append("⚙️ Panel Admina")
