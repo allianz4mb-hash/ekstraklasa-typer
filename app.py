@@ -37,32 +37,21 @@ def oblicz_punkty(typ_g, typ_go, real_g, real_go):
     return 0
 
 def recalculate_all_points():
-    # Pobierz wszystkie mecze
     matches = supabase.table("mecze").select("*").execute().data
     matches_dict = {m['id']: m for m in matches}
-    
-    # Pobierz wszystkich graczy
     players = supabase.table("gracze").select("nick").execute().data
-    
     for p in players:
         nick = p['nick']
         total_points = 0
-        
-        # Pobierz wszystkie typy tego gracza
         typy = supabase.table("typy").select("*").eq("nick", nick).execute().data
-        
         for t in typy:
             mecz = matches_dict.get(t['mecz_id'])
             if mecz and mecz['status'] == 'FT':
-                # Oblicz i zapisz punkty dla tego meczu
                 pkt = oblicz_punkty(t['typ_gospodarze'], t['typ_goscie'], mecz['gole_gospodarze'], mecz['gole_goscie'])
                 supabase.table("typy").update({"punkty_za_mecz": pkt}).eq("id", t['id']).execute()
                 total_points += pkt
             else:
-                # Jeśli mecz się jeszcze nie skończył, zresetuj lub zostaw 0
                 supabase.table("typy").update({"punkty_za_mecz": 0}).eq("id", t['id']).execute()
-        
-        # Zaktualizuj sumę w tabeli gracze
         supabase.table("gracze").update({"punkty": total_points}).eq("nick", nick).execute()
 
 def sync_with_api():
@@ -82,8 +71,12 @@ def sync_with_api():
             existing = supabase.table("mecze").select("id").eq("gospodarze", gosp).eq("goscie", gosc).eq("data_meczu", data_str).execute().data
             
             status = 'FT' if match['status'] == 'FINISHED' else 'NS'
-            g_g = match['score']['fullTime']['home'] if match['score']['fullTime']['home'] is not None else 0
-            g_go = match['score']['fullTime']['away'] if match['score']['fullTime']['away'] is not None else 0
+            
+            # Wymuszenie pobrania tylko fullTime (90 minut)
+            score = match.get('score', {})
+            full_time = score.get('fullTime', {})
+            g_g = full_time.get('home') if full_time.get('home') is not None else 0
+            g_go = full_time.get('away') if full_time.get('away') is not None else 0
             
             dane_meczu = {
                 "gospodarze": gosp, "goscie": gosc, "logo_gospodarze": logo_g, "logo_goscie": logo_go,
@@ -161,13 +154,11 @@ else:
                 lock_time = mecz_time - timedelta(minutes=5)
                 is_locked = now >= lock_time
                 pl_time = mecz_time.astimezone(ZoneInfo("Europe/Warsaw"))
-                
                 st.markdown(f'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">'
                             f'<img src="{m["logo_gospodarze"]}" width="30">'
                             f'<span style="font-size: 18px;"><strong>{m["gospodarze"]} vs {m["goscie"]}</strong></span>'
                             f'<img src="{m["logo_goscie"]}" width="30">'
                             f'</div>', unsafe_allow_html=True)
-                
                 st.write(f"📅 Start (PL): {pl_time.strftime('%d.%m, %H:%M')}")
                 
                 time_diff = lock_time - now
