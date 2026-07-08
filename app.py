@@ -65,7 +65,8 @@ def sync_with_api():
     url_api = "https://api.football-data.org/v4/competitions/WC/matches"
     headers = {"X-Auth-Token": API_KEY}
     try:
-        with st.spinner("Synchronizacja danych z API..."):
+        # Zmieniony komunikat dla użytkowników
+        with st.spinner("Trwa automatyczna aktualizacja spotkań i wyników..."):
             resp = requests.get(url_api, headers=headers, timeout=10)
             if resp.status_code != 200: return False, f"Błąd API: {resp.status_code}"
             
@@ -129,9 +130,10 @@ def check_and_sync():
             
         diff = datetime.now(timezone.utc) - last_sync
         
+        # Synchronizacja co 30 minut
         if diff > timedelta(minutes=30):
             sync_with_api()
-            st.rerun()
+            st.rerun() 
     except Exception as e:
         st.sidebar.error(f"Błąd sync: {e}")
 
