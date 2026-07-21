@@ -1,4 +1,6 @@
+from datetime import datetime
 import re
+from zoneinfo import ZoneInfo
 import api
 import database
 import streamlit as st
@@ -7,9 +9,29 @@ st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide
 
 db = database.init_supabase()
 
+
+def formatuj_date(data_str):
+  """Przelicza czas UTC z API na czas polski (Europe/Warsaw) i formatuje czytelnie."""
+  if not data_str:
+    return ""
+  try:
+    # Zamiana ISO UTC (np. '2026-07-24T17:00:00Z') na obiekt datetime z UTC
+    val_str = str(data_str)
+    if val_str.endswith("Z"):
+      val_str = val_str[:-1] + "+00:00"
+
+    dt_utc = datetime.fromisoformat(val_str)
+    # Konwersja na strefę czasową Polski (Europe/Warsaw)
+    dt_pl = dt_utc.astimezone(ZoneInfo("Europe/Warsaw"))
+
+    return dt_pl.strftime("📅 %d.%m.%Y, godz. %H:%M")
+  except Exception:
+    return f"📅 {data_str}"
+
+
 st.title("⚽ Ekstraklasa Typer 2026/2027")
 
-# --- PANEL BOCZNY: LOGOWANIE I SYNCHRONIZACJA ---
+# --- PANEL BOCZNY ---
 st.sidebar.header("👤 Panel Gracza")
 
 try:
@@ -44,9 +66,7 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
       if surowe_mecze:
         sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
         if sukces:
-          st.sidebar.success(
-              f"Zsynchronizowano {len(surowe_mecze)} meczów pomyślnie!"
-          )
+          st.sidebar.success("Zsynchronizowano mecze pomyślnie!")
           st.rerun()
         else:
           st.sidebar.error("Błąd zapisu meczów do bazy.")
@@ -55,7 +75,7 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
     else:
       st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
-# --- GŁÓWNY WIDOK: TYPOWANIE KOLEJKI ---
+# --- GŁÓWNY WIDOK: FORMULARZ TYPOWANIA ---
 st.header("🎯 Formularz Typowania")
 
 try:
@@ -74,7 +94,6 @@ if not wszystkie_mecze:
 else:
 
 
-  # Funkcja do sortowania kolejek po liczbie
   def wyciagnij_numer_kolejki(nazwa_kolejki):
     cyfry = re.findall(r"\d+", nazwa_kolejki)
     return int(cyfry[0]) if cyfry else 0
@@ -90,7 +109,6 @@ else:
       m for m in wszystkie_mecze if m["kolejka"] == wybrana_kolejka
   ]
 
-  # Pobieramy zapisane typy gracza (jeśli jest zalogowany)
   dotychczasowe_typy = (
       database.pobierz_typy_gracza(wybrany_gracz) if wybrany_gracz else {}
   )
@@ -98,25 +116,56 @@ else:
   if not wybrany_gracz:
     st.warning("⚠️ Wybierz swój profil w panelu bocznym, aby móc typować mecze!")
 
-  # Formularz typowania
   with st.form("formularz_typowania"):
     nowe_typy = {}
 
     for mecz in mecze_w_kolejce:
       mecz_id = mecz["id"]
-      zapisany_typ = dotychczasowe_typy.get(mecz_id, (0, 0))
+      zapisany_typ = dotychczasowe_typy.get(mecz_id, None)
 
+      # Nagłówek meczu: Polskojęzyczna data oraz status obstawienia
+      data_f = formatuj_date(mecz.get("data_meczu"))
+
+      col_header1, col_header2 = st.columns([2, 2])
+      with col_header1:
+        st.caption(f"⏱️ {data_f}")
+      with col_header2:
+        if zapisany_typ is not None:
+          st.markdown(
+              f"<div style='text-align: right; color: #2e7d32; font-weight:"
+              f" bold;'>🟢 Obstawiono: {zapisany_typ[0]} - {zapisany_typ[1]}</div>",
+              unsafe_allow_html=True,
+          )
+        else:
+          st.markdown(
+              "<div style='text-align: right; color: #888888;'>⚪ Brak"
+              " typu</div>",
+              unsafe_allow_html=True,
+          )
+
+      # Wiersz zespołu i pól do wpisywania wyników
       col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 3])
 
       with col1:
-        st.write(f"**{mecz['gospodarze']}**")
+        logo_h = mecz.get("logo_gospodarze")
+        if logo_h:
+          col_img, col_txt = st.columns([1, 4])
+          with col_img:
+            st.image(logo_h, width=30)
+          with col_txt:
+            st.write(f"**{mecz['gospodarze']}**")
+        else:
+          st.write(f"**{mecz['gospodarze']}**")
+
+      domyslna_gosp = int(zapisany_typ[0]) if zapisany_typ is not None else 0
+      domyslna_gosc = int(zapisany_typ[1]) if zapisany_typ is not None else 0
 
       with col2:
         typ_gosp = st.number_input(
             "Gospodarze",
             min_value=0,
             max_value=15,
-            value=int(zapisany_typ[0]),
+            value=domyslna_gosp,
             key=f"gosp_{mecz_id}",
             label_visibility="collapsed",
             disabled=not wybrany_gracz,
@@ -133,14 +182,22 @@ else:
             "Goście",
             min_value=0,
             max_value=15,
-            value=int(zapisany_typ[1]),
+            value=domyslna_gosc,
             key=f"gosc_{mecz_id}",
             label_visibility="collapsed",
             disabled=not wybrany_gracz,
         )
 
       with col5:
-        st.write(f"**{mecz['goscie']}**")
+        logo_a = mecz.get("logo_goscie")
+        if logo_a:
+          col_img, col_txt = st.columns([1, 4])
+          with col_img:
+            st.image(logo_a, width=30)
+          with col_txt:
+            st.write(f"**{mecz['goscie']}**")
+        else:
+          st.write(f"**{mecz['goscie']}**")
 
       st.markdown("---")
 
