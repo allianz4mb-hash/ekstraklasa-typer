@@ -30,34 +30,37 @@ st.sidebar.subheader("⚙️ Zarządzanie ligą")
 if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
   with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
-    st.write("DEBUG - Liga info:", liga_info)  # <--- To pokaże nam czy znalazło ligę
+
+    # Wyświetlamy to, co zwróciło API na głównym ekranie i zatrzymujemy aplikację, żeby nie zniknęło
+    st.write("### 🔍 DEBUG - Dane ligi z API:")
+    st.json(liga_info)
 
     if liga_info:
       league_id = liga_info.get("id")
       seasons = liga_info.get("seasons", [])
       current_season = seasons[-1]["season"] if seasons else 2026
       st.write(
-          "DEBUG - League ID:", league_id, "Sezon:", current_season
-      )  # <--- ID i sezon
+          f"**Znalezione League ID:** {league_id} | **Sezon:** {current_season}"
+      )
 
       surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
-      st.write(
-          "DEBUG - Liczba pobranego surowego meczu:", len(surowe_mecze)
-      )  # <--- Ile meczów wróciło
+      st.write(f"**Liczba pobranych surowych meczów:** {len(surowe_mecze)}")
 
       if surowe_mecze:
-        sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
-        if sukces:
-          st.sidebar.success(
-              f"Zsynchronizowano {len(surowe_mecze)} meczów pomyślnie!"
-          )
-          st.rerun()
-        else:
-          st.sidebar.error("Błąd zapisu meczów do bazy.")
+        st.write("Przykładowy pierwszy mecz z API:")
+        st.json(surowe_mecze[0])
       else:
-        st.sidebar.warning("Nie znaleziono meczów w API dla tego sezonu.")
+        st.warning(
+            "API zwróciło pustą listę meczów (0 meczów). Sprawdź limit zapytań"
+            " w panelu Highlightly!"
+        )
     else:
-      st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
+      st.error(
+          "Nie udało się odnaleźć polskiej Ekstraklasy w zapytaniu do API."
+      )
+
+    # Zatrzymujemy kod tutaj, żeby nic nie znikało z ekranu
+    st.stop()
 
 # --- GŁÓWNY WIDOK: MECZE I KOLEJKI ---
 st.header("🎯 Nadchodząca Kolejka")
