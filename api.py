@@ -5,7 +5,6 @@ BASE_URL = "https://soccer.highlightly.net"
 
 
 def get_headers():
-  # Odczytujemy klucz dynamicznie przy każdym zapytaniu
   api_key = st.secrets.get("HIGHLIGHTLY_API_KEY", "").strip()
   return {"x-rapidapi-key": api_key}
 
@@ -23,7 +22,6 @@ def pobierz_ligę_ekstraklasa():
   except Exception:
     pass
 
-  # Awaryjny fallback dla Ekstraklasy
   return {
       "id": 90990,
       "name": "Ekstraklasa",
@@ -37,7 +35,6 @@ def pobierz_ligę_ekstraklasa():
   }
 
 
-# Bez @st.cache_data - synchronizacja zawsze wywoła świeże zapytanie HTTP!
 def pobierz_mecze_ekstraklasy(league_id: int, season: int):
   api_key = st.secrets.get("HIGHLIGHTLY_API_KEY", "").strip()
 
