@@ -30,13 +30,20 @@ st.sidebar.subheader("⚙️ Zarządzanie ligą")
 if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
   with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
+    st.write("DEBUG - Liga info:", liga_info)  # <--- To pokaże nam czy znalazło ligę
 
     if liga_info:
       league_id = liga_info.get("id")
       seasons = liga_info.get("seasons", [])
       current_season = seasons[-1]["season"] if seasons else 2026
+      st.write(
+          "DEBUG - League ID:", league_id, "Sezon:", current_season
+      )  # <--- ID i sezon
 
       surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
+      st.write(
+          "DEBUG - Liczba pobranego surowego meczu:", len(surowe_mecze)
+      )  # <--- Ile meczów wróciło
 
       if surowe_mecze:
         sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
@@ -48,9 +55,7 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
         else:
           st.sidebar.error("Błąd zapisu meczów do bazy.")
       else:
-        st.sidebar.warning(
-            "Nie znaleziono meczów w API lub limit zapytań został wyczerpany."
-        )
+        st.sidebar.warning("Nie znaleziono meczów w API dla tego sezonu.")
     else:
       st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
