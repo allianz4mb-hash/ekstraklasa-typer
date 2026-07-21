@@ -33,42 +33,35 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
 
     if liga_info:
       seasons = liga_info.get("seasons", [])
-      st.write(
-          "📋 Dostępne sezony w API:", [s["season"] for s in seasons]
-      )
-
       current_season = (
           max([s["season"] for s in seasons]) if seasons else 2026
       )
-      st.write(f"🎯 Wybrany najnowszy sezon do pobrania: **{current_season}**")
-
       league_id = liga_info.get("id")
+
+      # Pobieramy mecze dla najnowszego sezonu
       surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
 
-      st.write(
-          f"⚽ Liczba surowych meczów zwróconych przez API:"
-          f" **{len(surowe_mecze)}**"
-      )
-
       if surowe_mecze:
-        st.write("Pierwszy mecz z listy:", surowe_mecze[0])
+        # Zapisujemy paczkę do bazy Supabase
+        sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
+        if sukces:
+          st.sidebar.success(
+              f"Zsynchronizowano {len(surowe_mecze)} meczów pomyślnie!"
+          )
+          st.rerun()
+        else:
+          st.sidebar.error("Błąd zapisu meczów do bazy.")
       else:
-        st.warning(
-            "⚠️ API zwróciło 0 meczów dla tego sezonu! Prawdopodobnie sezon 2026"
-            " nie ma jeszcze rozpiski w bazie Highlightly."
-        )
+        st.sidebar.warning("API zwróciło pustą listę meczów.")
     else:
-      st.error("❌ Nie udało się odnaleźć polskiej Ekstraklasy w API.")
-
-    # Zatrzymujemy kod tutaj, nic nie zniknie z ekranu!
-    st.stop()
+      st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
 # --- GŁÓWNY WIDOK: MECZE I KOLEJKI ---
 st.header("🎯 Nadchodząca Kolejka")
 
 try:
   res_mecze = (
-      db.table("mecze").select("*").order("data_mecz", desc=False).execute()
+      db.table("mecze").select("*").order("data_meczu", desc=False).execute()
   )
   wszystkie_mecze = res_mecze.data
 except Exception:
@@ -80,6 +73,7 @@ if not wszystkie_mecze:
       " bocznym!"
   )
 else:
+  # Wyciągamy unikalne kolejki
   kolejki = sorted(list(set(m["kolejka"] for m in wszystkie_mecze)))
   wybrana_kolejka = st.selectbox("Wybierz kolejkę:", kolejki)
 
@@ -90,9 +84,12 @@ else:
   for mecz in mecze_w_kolejce:
     col1, col2, col3 = st.columns([3, 2, 3])
     with col1:
-      st.write(f"**{mecz['gospodarz']}**")
+      st.write(f"**{mecz['gospodarze']}**")
     with col2:
-      st.code(f"{mecz['wynik']} | {mecz['status']}", language="text")
+      st.code(
+          f"{mecz.get('wynik', '0 - 0')} | {mecz.get('status', 'Not started')}",
+          language="text",
+      )
     with col3:
-      st.write(f"**{mecz['gosc']}**")
+      st.write(f"**{mecz['goscie']}**")
     st.markdown("---")
