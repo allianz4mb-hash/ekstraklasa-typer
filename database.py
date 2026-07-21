@@ -2,7 +2,6 @@ import os
 import streamlit as st
 from supabase import create_client, Client
 
-# Połączenie z bazą Supabase (pobierane ze Streamlit secrets)
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
 
@@ -14,14 +13,12 @@ supabase = init_supabase()
 
 def synchronizuj_mecze_wsadowo(mecze_z_api):
     """
-    Optymalizacja wsadowa: zamiast dziesiątek pojedynczych zapytań, 
-    przetwarza i aktualizuje mecze w bazie błyskawicznie.
+    Optymalizacja wsadowa dopasowana do struktury tabeli w Supabase.
     """
     if not mecze_z_api:
         return False
 
     try:
-        # Przygotowujemy dane do wgrania/aktualizacji paczką
         paczka_danych = []
         for mecz in mecze_z_api:
             match_id = mecz.get("id")
@@ -30,24 +27,23 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
             home_team = mecz.get("homeTeam", {}).get("name")
             away_team = mecz.get("awayTeam", {}).get("name")
             
-            # Stan meczu i wyniki
             state_info = mecz.get("state", {})
             status = state_info.get("description", "Not started")
             score = state_info.get("score", {}).get("current", "0 - 0")
 
+            # Dostosowane nazwy kluczy do tabeli 'mecze'
             paczka_danych.append({
-                "match_id": match_id,
+                "id": match_id,               # w SQL było: id INT PRIMARY KEY
                 "kolejka": round_name,
-                "data_mecz": date,
-                "gospodarz": home_team,
-                "gosc": away_team,
+                "data_meczu": date,           # w SQL było: data_meczu TIMESTAMP
+                "gospodarze": home_team,      # w SQL było: gospodarze TEXT
+                "goscie": away_team,          # w SQL było: goscie TEXT
                 "status": status,
-                "wynik": score
+                "gole_gospodarze": 0,         # domyślne wartości liczbowe dla bezpieczeństwa
+                "gole_goscie": 0
             })
 
-        # Wysłanie całej paczki do Supabase naraz (upsert po match_id)
-        # Dzięki temu cała operacja trwa ułamek sekundy zamiast 2 minut!
-        response = supabase.table("mecze").upsert(paczka_danych, on_conflict="match_id").execute()
+        response = supabase.table("mecze").upsert(paczka_danych, on_conflict="id").execute()
         return True
 
     except Exception as e:
