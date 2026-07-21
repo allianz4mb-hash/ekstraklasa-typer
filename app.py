@@ -18,10 +18,10 @@ try:
 except Exception:
   dostepni_gracze = []
 
-wybrany_gracze = st.sidebar.selectbox("Wybierz swój profil:", dostepni_gracze)
+wybrany_gracz = st.sidebar.selectbox("Wybierz swój profil:", dostepni_gracze)
 
-if wybrany_gracze:
-  st.sidebar.success(f"Zalogowany jako: **{wybrany_gracze}**")
+if wybrany_gracz:
+  st.sidebar.success(f"Zalogowany jako: **{wybrany_gracz}**")
 else:
   st.sidebar.warning("Brak graczy w bazie. Dodaj kogoś w tabeli 'gracze'!")
 
@@ -39,11 +39,9 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
       )
       league_id = liga_info.get("id")
 
-      # Pobieramy mecze dla najnowszego sezonu
       surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
 
       if surowe_mecze:
-        # Zapisujemy paczkę do bazy Supabase
         sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
         if sukces:
           st.sidebar.success(
@@ -57,8 +55,8 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
     else:
       st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
-# --- GŁÓWNY WIDOK: MECZE I KOLEJKI ---
-st.header("🎯 Nadchodząca Kolejka")
+# --- GŁÓWNY WIDOK: TYPOWANIE KOLEJKI ---
+st.header("🎯 Formularz Typowania")
 
 try:
   res_mecze = (
@@ -76,33 +74,93 @@ if not wszystkie_mecze:
 else:
 
 
-  # Funkcja do mądrego sortowania kolejek po liczbie (np. 4 przed 10)
+  # Funkcja do sortowania kolejek po liczbie
   def wyciagnij_numer_kolejki(nazwa_kolejki):
     cyfry = re.findall(r"\d+", nazwa_kolejki)
     return int(cyfry[0]) if cyfry else 0
 
 
-  # Wyciągamy unikalne kolejki i sortujemy je numerycznie
   kolejki = sorted(
       list(set(m["kolejka"] for m in wszystkie_mecze)),
       key=wyciagnij_numer_kolejki,
   )
-
-  wybrana_kolejka = st.selectbox("Wybierz kolejkę:", kolejki)
+  wybrana_kolejka = st.selectbox("Wybierz kolejkę do wytypowania:", kolejki)
 
   mecze_w_kolejce = [
       m for m in wszystkie_mecze if m["kolejka"] == wybrana_kolejka
   ]
 
-  for mecz in mecze_w_kolejce:
-    col1, col2, col3 = st.columns([3, 2, 3])
-    with col1:
-      st.write(f"**{mecz['gospodarze']}**")
-    with col2:
-      st.code(
-          f"{mecz.get('wynik', '0 - 0')} | {mecz.get('status', 'Not started')}",
-          language="text",
-      )
-    with col3:
-      st.write(f"**{mecz['goscie']}**")
-    st.markdown("---")
+  # Pobieramy zapisane typy gracza (jeśli jest zalogowany)
+  dotychczasowe_typy = (
+      database.pobierz_typy_gracza(wybrany_gracz) if wybrany_gracz else {}
+  )
+
+  if not wybrany_gracz:
+    st.warning("⚠️ Wybierz swój profil w panelu bocznym, aby móc typować mecze!")
+
+  # Formularz typowania
+  with st.form("formularz_typowania"):
+    nowe_typy = {}
+
+    for mecz in mecze_w_kolejce:
+      mecz_id = mecz["id"]
+      zapisany_typ = dotychczasowe_typy.get(mecz_id, (0, 0))
+
+      col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 3])
+
+      with col1:
+        st.write(f"**{mecz['gospodarze']}**")
+
+      with col2:
+        typ_gosp = st.number_input(
+            "Gospodarze",
+            min_value=0,
+            max_value=15,
+            value=int(zapisany_typ[0]),
+            key=f"gosp_{mecz_id}",
+            label_visibility="collapsed",
+            disabled=not wybrany_gracz,
+        )
+
+      with col3:
+        st.markdown(
+            "<h4 style='text-align: center; margin: 0;'>:</h4>",
+            unsafe_allow_html=True,
+        )
+
+      with col4:
+        typ_gosc = st.number_input(
+            "Goście",
+            min_value=0,
+            max_value=15,
+            value=int(zapisany_typ[1]),
+            key=f"gosc_{mecz_id}",
+            label_visibility="collapsed",
+            disabled=not wybrany_gracz,
+        )
+
+      with col5:
+        st.write(f"**{mecz['goscie']}**")
+
+      st.markdown("---")
+
+      nowe_typy[mecz_id] = {
+          "gracz_nick": wybrany_gracz,
+          "mecz_id": mecz_id,
+          "typ_gospodarze": typ_gosp,
+          "typ_goscie": typ_gosc,
+      }
+
+    zapisz_button = st.form_submit_button(
+        "💾 Zapisz moje typy na tę kolejkę",
+        use_container_width=True,
+        type="primary",
+        disabled=not wybrany_gracz,
+    )
+
+    if zapisz_button:
+      paczka_do_zapisu = list(nowe_typy.values())
+      sukces = database.zapisz_typy_gracza(paczka_do_zapisu)
+      if sukces:
+        st.success("✅ Pomyślnie zapisano Twoje typy!")
+        st.rerun()
