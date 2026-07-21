@@ -2,11 +2,12 @@ import requests
 import streamlit as st
 
 BASE_URL = "https://soccer.highlightly.net"
-API_KEY = st.secrets.get("HIGHLIGHTLY_API_KEY", "")
 
 
 def get_headers():
-  return {"x-rapidapi-key": API_KEY}
+  # Odczytujemy klucz dynamicznie przy każdym zapytaniu
+  api_key = st.secrets.get("HIGHLIGHTLY_API_KEY", "").strip()
+  return {"x-rapidapi-key": api_key}
 
 
 @st.cache_data(ttl=3600)
@@ -22,7 +23,7 @@ def pobierz_ligę_ekstraklasa():
   except Exception:
     pass
 
-  # Awaryjny fallback (zabezpieczenie przed limitami API – znamy ID Ekstraklasy)
+  # Awaryjny fallback dla Ekstraklasy
   return {
       "id": 90990,
       "name": "Ekstraklasa",
@@ -36,30 +37,57 @@ def pobierz_ligę_ekstraklasa():
   }
 
 
-@st.cache_data(ttl=1800)
+# Bez @st.cache_data - synchronizacja zawsze wywoła świeże zapytanie HTTP!
 def pobierz_mecze_ekstraklasy(league_id: int, season: int):
-  url = f"{BASE_URL}/matches"
-  # Zwiększony limit na 400, żeby pobrać cały sezon naraz
-  params = {"leagueId": league_id, "season": season, "limit": 400}
-  try:
-    response = requests.get(url, headers=get_headers(), params=params)
-    if response.status_code == 200:
-      surowe_mecze = response.json().get("data", [])
-      czyste_mecze = []
-      for mecz in surowe_mecze:
-        home = mecz.get("homeTeam", {}).get("name")
-        away = mecz.get("awayTeam", {}).get("name")
-        if (
-            home
-            and away
-            and "unknown" not in home.lower()
-            and "unknown" not in away.lower()
-        ):
-          czyste_mecze.append(mecz)
-      return czyste_mecze
-    else:
-      st.error(f"Błąd pobierania meczów: {response.status_code}")
-      return []
-  except Exception as e:
-    st.error(f"Błąd połączenia: {e}")
+  api_key = st.secrets.get("HIGHLIGHTLY_API_KEY", "").strip()
+
+  if not api_key:
+    st.error("❌ Brak klucza HIGHLIGHTLY_API_KEY w Streamlit Secrets!")
     return []
+
+  url = f"{BASE_URL}/matches"
+  wszystkie_mecze = []
+  offset = 0
+  limit = 100
+
+  while True:
+    params = {
+        "leagueId": league_id,
+        "season": season,
+        "limit": limit,
+        "offset": offset,
+    }
+    try:
+      response = requests.get(url, headers=get_headers(), params=params)
+
+      if response.status_code == 200:
+        pobrana_paczka = response.json().get("data", [])
+
+        if not pobrana_paczka:
+          break
+
+        for mecz in pobrana_paczka:
+          home = mecz.get("homeTeam", {}).get("name")
+          away = mecz.get("awayTeam", {}).get("name")
+          if (
+              home
+              and away
+              and "unknown" not in home.lower()
+              and "unknown" not in away.lower()
+          ):
+            wszystkie_mecze.append(mecz)
+
+        if len(pobrana_paczka) < limit:
+          break
+
+        offset += limit
+      else:
+        st.error(
+            f"Błąd pobierania meczów ({response.status_code}): {response.text}"
+        )
+        break
+    except Exception as e:
+      st.error(f"Błąd połączenia z API: {e}")
+      break
+
+  return wszystkie_mecze
