@@ -40,9 +40,27 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
                 "wynik": score
             })
 
-        response = supabase.table("mecze").upsert(paczka_danych, on_conflict="id").execute()
+        supabase.table("mecze").upsert(paczka_danych, on_conflict="id").execute()
         return True
 
     except Exception as e:
         st.error(f"Błąd synchronizacji wsadowej z bazą: {e}")
+        return False
+
+def pobierz_typy_gracza(gracz_nick: str):
+    """Pobiera dotychczasowe typy danego gracza jako słownik: {mecz_id: (gole_gosp, gole_gosc)}"""
+    try:
+        res = supabase.table("typy").select("*").eq("gracz_nick", gracz_nick).execute()
+        return {item["mecz_id"]: (item["typ_gospodarze"], item["typ_goscie"]) for item in res.data}
+    except Exception as e:
+        st.error(f"Błąd pobierania typów: {e}")
+        return {}
+
+def zapisz_typy_gracza(paczka_typow):
+    """Zapisuje lub aktualizuje paczkę typów gracza w bazie"""
+    try:
+        supabase.table("typy").upsert(paczka_typow, on_conflict="gracz_nick,mecz_id").execute()
+        return True
+    except Exception as e:
+        st.error(f"Błąd zapisu typów: {e}")
         return False
