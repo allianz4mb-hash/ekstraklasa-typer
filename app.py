@@ -35,20 +35,21 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
       league_id = liga_info.get("id")
       seasons = liga_info.get("seasons", [])
 
-      # ZAMIAST seasons[-1], bierzemy najwyższy (najnowszy) rok z listy!
+      # Zobaczmy jakie sezony są dostępne w liście
+      st.write(
+          "Dostępne sezony w API:", [s["season"] for s in seasons]
+      )  # <--- Podgląd dostępnych lat
+
       current_season = (
           max([s["season"] for s in seasons]) if seasons else 2026
       )
-      st.write(
-          f"**Znalezione League ID:** {league_id} | **Najnowszy Sezon:**"
-          f" {current_season}"
-      )
+      st.write(f"Wybrany najnowszy sezon: {current_season}")
 
       surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
       st.write(
-          f"**Liczba pobranych surowych meczów dla sezonu"
-          f" {current_season}:** {len(surowe_mecze)}"
-      )
+          f"Liczba surowych meczów zwróconych przez API:"
+          f" {len(surowe_mecze)}"
+      )  # <--- Sprawdzimy czy to 0
 
       if surowe_mecze:
         sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
@@ -56,19 +57,15 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
           st.sidebar.success(
               f"Zsynchronizowano {len(surowe_mecze)} meczów pomyślnie!"
           )
-          # Usuwamy st.stop() i robimy normalny restart, żeby przejść do widoku
           st.rerun()
         else:
           st.sidebar.error("Błąd zapisu meczów do bazy.")
       else:
         st.warning(
-            "API zwróciło pustą listę meczów dla tego sezonu. Sprawdź czy sezon"
-            " ma już rozpisany terminarz."
+            "API zwróciło 0 meczów dla tego sezonu! Spróbujmy sezonu 2025."
         )
     else:
-      st.error(
-          "Nie udało się odnaleźć polskiej Ekstraklasy w zapytaniu do API."
-      )
+      st.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
 # --- GŁÓWNY WIDOK: MECZE I KOLEJKI ---
 st.header("🎯 Nadchodząca Kolejka")
