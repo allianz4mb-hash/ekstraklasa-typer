@@ -31,36 +31,44 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
   with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
 
-    # Wyświetlamy to, co zwróciło API na głównym ekranie i zatrzymujemy aplikację, żeby nie zniknęło
-    st.write("### 🔍 DEBUG - Dane ligi z API:")
-    st.json(liga_info)
-
     if liga_info:
       league_id = liga_info.get("id")
       seasons = liga_info.get("seasons", [])
-      current_season = seasons[-1]["season"] if seasons else 2026
+
+      # ZAMIAST seasons[-1], bierzemy najwyższy (najnowszy) rok z listy!
+      current_season = (
+          max([s["season"] for s in seasons]) if seasons else 2026
+      )
       st.write(
-          f"**Znalezione League ID:** {league_id} | **Sezon:** {current_season}"
+          f"**Znalezione League ID:** {league_id} | **Najnowszy Sezon:**"
+          f" {current_season}"
       )
 
       surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
-      st.write(f"**Liczba pobranych surowych meczów:** {len(surowe_mecze)}")
+      st.write(
+          f"**Liczba pobranych surowych meczów dla sezonu"
+          f" {current_season}:** {len(surowe_mecze)}"
+      )
 
       if surowe_mecze:
-        st.write("Przykładowy pierwszy mecz z API:")
-        st.json(surowe_mecze[0])
+        sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
+        if sukces:
+          st.sidebar.success(
+              f"Zsynchronizowano {len(surowe_mecze)} meczów pomyślnie!"
+          )
+          # Usuwamy st.stop() i robimy normalny restart, żeby przejść do widoku
+          st.rerun()
+        else:
+          st.sidebar.error("Błąd zapisu meczów do bazy.")
       else:
         st.warning(
-            "API zwróciło pustą listę meczów (0 meczów). Sprawdź limit zapytań"
-            " w panelu Highlightly!"
+            "API zwróciło pustą listę meczów dla tego sezonu. Sprawdź czy sezon"
+            " ma już rozpisany terminarz."
         )
     else:
       st.error(
           "Nie udało się odnaleźć polskiej Ekstraklasy w zapytaniu do API."
       )
-
-    # Zatrzymujemy kod tutaj, żeby nic nie znikało z ekranu
-    st.stop()
 
 # --- GŁÓWNY WIDOK: MECZE I KOLEJKI ---
 st.header("🎯 Nadchodząca Kolejka")
