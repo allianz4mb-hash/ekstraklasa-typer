@@ -12,9 +12,6 @@ def init_supabase() -> Client:
 supabase = init_supabase()
 
 def synchronizuj_mecze_wsadowo(mecze_z_api):
-    """
-    Optymalizacja wsadowa dopasowana do struktury tabeli w Supabase.
-    """
     if not mecze_z_api:
         return False
 
@@ -29,18 +26,18 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
             
             state_info = mecz.get("state", {})
             status = state_info.get("description", "Not started")
-            score = state_info.get("score", {}).get("current", "0 - 0")
+            score = state_info.get("score", {}).get("current") or "- : -"
 
-            # Dostosowane nazwy kluczy do tabeli 'mecze'
             paczka_danych.append({
-                "id": match_id,               # w SQL było: id INT PRIMARY KEY
+                "id": match_id,
                 "kolejka": round_name,
-                "data_meczu": date,           # w SQL było: data_meczu TIMESTAMP
-                "gospodarze": home_team,      # w SQL było: gospodarze TEXT
-                "goscie": away_team,          # w SQL było: goscie TEXT
+                "data_meczu": date,
+                "gospodarze": home_team,
+                "goscie": away_team,
                 "status": status,
-                "gole_gospodarze": 0,         # domyślne wartości liczbowe dla bezpieczeństwa
-                "gole_goscie": 0
+                "gole_gospodarze": 0,
+                "gole_goscie": 0,
+                "wynik": score
             })
 
         response = supabase.table("mecze").upsert(paczka_danych, on_conflict="id").execute()
