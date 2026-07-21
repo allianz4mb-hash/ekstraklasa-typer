@@ -1,3 +1,4 @@
+import re
 import api
 import database
 import streamlit as st
@@ -73,8 +74,20 @@ if not wszystkie_mecze:
       " bocznym!"
   )
 else:
-  # Wyciągamy unikalne kolejki
-  kolejki = sorted(list(set(m["kolejka"] for m in wszystkie_mecze)))
+
+
+  # Funkcja do mądrego sortowania kolejek po liczbie (np. 4 przed 10)
+  def wyciagnij_numer_kolejki(nazwa_kolejki):
+    cyfry = re.findall(r"\d+", nazwa_kolejki)
+    return int(cyfry[0]) if cyfry else 0
+
+
+  # Wyciągamy unikalne kolejki i sortujemy je numerycznie
+  kolejki = sorted(
+      list(set(m["kolejka"] for m in wszystkie_mecze)),
+      key=wyciagnij_numer_kolejki,
+  )
+
   wybrana_kolejka = st.selectbox("Wybierz kolejkę:", kolejki)
 
   mecze_w_kolejce = [
