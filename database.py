@@ -21,8 +21,14 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
             match_id = mecz.get("id")
             round_name = mecz.get("round", "Kolejka")
             date = mecz.get("date")
-            home_team = mecz.get("homeTeam", {}).get("name")
-            away_team = mecz.get("awayTeam", {}).get("name")
+            
+            home_info = mecz.get("homeTeam", {})
+            away_info = mecz.get("awayTeam", {})
+            
+            home_team = home_info.get("name")
+            away_team = away_info.get("name")
+            home_logo = home_info.get("logo") or home_info.get("logoUrl") or ""
+            away_logo = away_info.get("logo") or away_info.get("logoUrl") or ""
             
             state_info = mecz.get("state", {})
             status = state_info.get("description", "Not started")
@@ -34,6 +40,8 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
                 "data_meczu": date,
                 "gospodarze": home_team,
                 "goscie": away_team,
+                "logo_gospodarze": home_logo,
+                "logo_goscie": away_logo,
                 "status": status,
                 "gole_gospodarze": 0,
                 "gole_goscie": 0,
@@ -48,7 +56,6 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
         return False
 
 def pobierz_typy_gracza(gracz_nick: str):
-    """Pobiera dotychczasowe typy danego gracza jako słownik: {mecz_id: (gole_gosp, gole_gosc)}"""
     try:
         res = supabase.table("typy").select("*").eq("gracz_nick", gracz_nick).execute()
         return {item["mecz_id"]: (item["typ_gospodarze"], item["typ_goscie"]) for item in res.data}
@@ -57,7 +64,6 @@ def pobierz_typy_gracza(gracz_nick: str):
         return {}
 
 def zapisz_typy_gracza(paczka_typow):
-    """Zapisuje lub aktualizuje paczkę typów gracza w bazie"""
     try:
         supabase.table("typy").upsert(paczka_typow, on_conflict="gracz_nick,mecz_id").execute()
         return True
