@@ -32,40 +32,36 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
     liga_info = api.pobierz_ligę_ekstraklasa()
 
     if liga_info:
-      league_id = liga_info.get("id")
       seasons = liga_info.get("seasons", [])
-
-      # Zobaczmy jakie sezony są dostępne w liście
       st.write(
-          "Dostępne sezony w API:", [s["season"] for s in seasons]
-      )  # <--- Podgląd dostępnych lat
+          "📋 Dostępne sezony w API:", [s["season"] for s in seasons]
+      )
 
       current_season = (
           max([s["season"] for s in seasons]) if seasons else 2026
       )
-      st.write(f"Wybrany najnowszy sezon: {current_season}")
+      st.write(f"🎯 Wybrany najnowszy sezon do pobrania: **{current_season}**")
 
+      league_id = liga_info.get("id")
       surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
+
       st.write(
-          f"Liczba surowych meczów zwróconych przez API:"
-          f" {len(surowe_mecze)}"
-      )  # <--- Sprawdzimy czy to 0
+          f"⚽ Liczba surowych meczów zwróconych przez API:"
+          f" **{len(surowe_mecze)}**"
+      )
 
       if surowe_mecze:
-        sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
-        if sukces:
-          st.sidebar.success(
-              f"Zsynchronizowano {len(surowe_mecze)} meczów pomyślnie!"
-          )
-          st.rerun()
-        else:
-          st.sidebar.error("Błąd zapisu meczów do bazy.")
+        st.write("Pierwszy mecz z listy:", surowe_mecze[0])
       else:
         st.warning(
-            "API zwróciło 0 meczów dla tego sezonu! Spróbujmy sezonu 2025."
+            "⚠️ API zwróciło 0 meczów dla tego sezonu! Prawdopodobnie sezon 2026"
+            " nie ma jeszcze rozpiski w bazie Highlightly."
         )
     else:
-      st.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
+      st.error("❌ Nie udało się odnaleźć polskiej Ekstraklasy w API.")
+
+    # Zatrzymujemy kod tutaj, nic nie zniknie z ekranu!
+    st.stop()
 
 # --- GŁÓWNY WIDOK: MECZE I KOLEJKI ---
 st.header("🎯 Nadchodząca Kolejka")
