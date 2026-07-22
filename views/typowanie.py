@@ -4,8 +4,22 @@ import database
 import streamlit as st
 
 
+def formatuj_nazwe_kolejki(kolejka_raw):
+  """Zamienia np. 'Regular Season - 1' na '1. Kolejka PKO BP Ekstraklapy'."""
+  if not kolejka_raw:
+    return "1. Kolejka PKO BP Ekstraklapy"
+
+  # Jeśli ciąg zawiera separator '-', wyciągamy sam numer z końca
+  if "-" in kolejka_raw:
+    parts = kolejka_raw.split("-")
+    nr = parts[-1].strip()
+    if nr.isdigit():
+      return f"{nr}. Kolejka PKO BP Ekstraklapy"
+
+  return kolejka_raw
+
+
 def daj_klimatyczny_naglowek(data_iso_str):
-  """Zamienia datę ISO na klimatyczny nagłówek dnia tygodnia."""
   try:
     if data_iso_str.endswith("Z"):
       data_iso_str = data_iso_str[:-1] + "+00:00"
@@ -13,7 +27,7 @@ def daj_klimatyczny_naglowek(data_iso_str):
     dt = datetime.fromisoformat(data_iso_str).astimezone(
         ZoneInfo("Europe/Warsaw")
     )
-    dzien_tygodnia = dt.weekday()  # 0=Mon, 1=Tue, ..., 6=Sun
+    dzien_tygodnia = dt.weekday()
     data_ladna = dt.strftime("%d.%m.%Y")
 
     slogany = {
@@ -31,7 +45,6 @@ def daj_klimatyczny_naglowek(data_iso_str):
 
 
 def formatuj_godzine(data_iso_str):
-  """Sformatuje datę ISO do samej godziny HH:MM."""
   try:
     if data_iso_str.endswith("Z"):
       data_iso_str = data_iso_str[:-1] + "+00:00"
@@ -53,22 +66,26 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
     st.warning("Brak meczów w bazie danych. Wykonaj synchronizację w panelu.")
     return
 
-  # Wybór kolejki
-  kolejki = sorted(
-      list(set(m.get("kolejka", "Kolejka 1") for m in wszystkie_mecze))
+  # Tworzymy mapowanie surowych nazw kolejek z API na ładne nazwy polskie
+  surowe_kolejki = sorted(
+      list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
   )
-  wybrana_kolejka = st.selectbox("Wybierz kolejkę do wytypowania:", kolejki)
+  mapa_kolejek = {k: formatuj_nazwe_kolejki(k) for kk in [surowe_kolejki] for k in kk}
+
+  wybrana_kolejka_raw = st.selectbox(
+      "Wybierz kolejkę do wytypowania:",
+      options=surowe_kolejki,
+      format_func=lambda x: mapa_kolejek[x],
+  )
 
   mecze_kolejki = [
-      m for m in wszystkie_mecze if m.get("kolejka") == wybrana_kolejka
+      m for m in wszystkie_mecze if m.get("kolejka") == wybrana_kolejka_raw
   ]
 
-  # Pobranie dotychczasowych typów gracza
   dotychczasowe_typy = (
       database.pobierz_typy_gracza(zalogowany_gracz) if zalogowany_gracz else {}
   )
 
-  # Grupowanie meczów po nagłówkach dni
   pogrupowane_mecze = {}
   for mecz in mecze_kolejki:
     naglowek, dt = daj_klimatyczny_naglowek(mecz.get("data_meczu", ""))
@@ -78,7 +95,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
 
   nowe_typy = []
 
-  with st.form(key=f"form_typy_{wybrana_kolejka}"):
+  with st.form(key=f"form_typy_{wybrana_kolejka_raw}"):
     for naglowek_dnia, mecze in pogrupowane_mecze.items():
       st.subheader(naglowek_dnia)
       st.markdown("---")
@@ -92,7 +109,6 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
         data_meczu = mecz.get("data_meczu", "")
         godzina_str = formatuj_godzine(data_meczu)
 
-        # Status typu gracza (badge po prawej stronie)
         czy_obstawiono = mecz_id in dotychczasowe_typy
         if czy_obstawiono:
           domyslne_h, domyslne_a = dotychczasowe_typy[mecz_id]
@@ -101,14 +117,12 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
           domyslne_h, domyslne_a = 0, 0
           badge_html = "<div style='text-align: right; color: #757575;'>⚪ Brak typu</div>"
 
-        # Pasek informacji nad meczem (Godzina + Status obstawienia)
         col_info1, col_info2 = st.columns([1, 1])
         with col_info1:
           st.caption(f"⏱️ {godzina_str}")
         with col_info2:
           st.markdown(badge_html, unsafe_allow_html=True)
 
-        # Rząd wyboru wyniku meczu
         col_h, col_vs, col_a = st.columns([4, 1, 4])
 
         with col_h:
