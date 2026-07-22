@@ -30,6 +30,19 @@ def daj_klimatyczny_naglowek(data_iso_str):
     return data_iso_str, None
 
 
+def formatuj_godzine(data_iso_str):
+  """Sformatuje datę ISO do samej godziny HH:MM."""
+  try:
+    if data_iso_str.endswith("Z"):
+      data_iso_str = data_iso_str[:-1] + "+00:00"
+    dt = datetime.fromisoformat(data_iso_str).astimezone(
+        ZoneInfo("Europe/Warsaw")
+    )
+    return dt.strftime("godz. %H:%M")
+  except Exception:
+    return ""
+
+
 def render_typowanie(wszystkie_mecze, zalogowany_gracz):
   st.header("🎯 Formularz Typowania")
 
@@ -76,10 +89,26 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
         goscie = mecz.get("goscie", "Goście")
         logo_h = mecz.get("logo_gospodarze", "")
         logo_a = mecz.get("logo_goscie", "")
+        data_meczu = mecz.get("data_meczu", "")
+        godzina_str = formatuj_godzine(data_meczu)
 
-        # Pobieramy zapisany typ jeśli istnieje
-        domyslne_h, domyslne_a = dotychczasowe_typy.get(mecz_id, (0, 0))
+        # Status typu gracza (badge po prawej stronie)
+        czy_obstawiono = mecz_id in dotychczasowe_typy
+        if czy_obstawiono:
+          domyslne_h, domyslne_a = dotychczasowe_typy[mecz_id]
+          badge_html = f"<div style='text-align: right; color: #2e7d32; font-weight: bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a}</div>"
+        else:
+          domyslne_h, domyslne_a = 0, 0
+          badge_html = "<div style='text-align: right; color: #757575;'>⚪ Brak typu</div>"
 
+        # Pasek informacji nad meczem (Godzina + Status obstawienia)
+        col_info1, col_info2 = st.columns([1, 1])
+        with col_info1:
+          st.caption(f"⏱️ {godzina_str}")
+        with col_info2:
+          st.markdown(badge_html, unsafe_allow_html=True)
+
+        # Rząd wyboru wyniku meczu
         col_h, col_vs, col_a = st.columns([4, 1, 4])
 
         with col_h:
@@ -97,11 +126,16 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
           )
 
         with col_vs:
-          st.markdown("<h3 style='text-align: center;'>:</h3>", unsafe_allow_html=True)
+          st.markdown(
+              "<h3 style='text-align: center;'>:</h3>", unsafe_allow_html=True
+          )
 
         with col_a:
           c1, c2 = st.columns([4, 1])
-          c1.markdown(f"<div style='text-align: right;'><b>{goscie}</b></div>", unsafe_allow_html=True)
+          c1.markdown(
+              f"<div style='text-align: right;'><b>{goscie}</b></div>",
+              unsafe_allow_html=True,
+          )
           if logo_a:
             c2.image(logo_a, width=30)
           typ_a = st.number_input(
