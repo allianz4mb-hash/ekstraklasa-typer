@@ -5,7 +5,6 @@ def render_regulamin():
   st.header("📜 Regulamin i Zasady Typera")
   st.markdown("---")
 
-  # Tutaj możesz wpisać dowolny tekst używając zwykłego formatowania Markdown
   st.markdown("""
     ### ⚽ 1. Zasady Punktacji
     Za każdy wytypowany mecz przyznawane są punkty według poniższego klucza:
@@ -23,9 +22,19 @@ def render_regulamin():
 
     ### 🏆 3. Klasyfikacja i Rozstrzygnięcia
     * O pozycji w tabeli decyduje łączna liczba zdobytych punktów.
-    * W przypadku równej liczby punktów na koniec sezonu decyduje:
+    * W przypadku równej liczby punktów decyduje:
       1. Większa liczba dokładnie trafionych wyników (za 3 pkt).
       2. Wyższa frekwencja typowania.
+
+    ---
+
+    ### 💰 4. Wpisowe i Nagrody (Runda Jesienna)
+    * Każdy uczestnik zobowiązuje się przelać na wskazane konto kwotę **100 zł**.
+    * Pula nagród po zakończeniu **rundy jesiennej** zostanie podzielona w następujący sposób:
+      * **1. miejsce:** 60% zebranej kwoty
+      * **2. miejsce:** 25% zebranej kwoty
+      * **3. miejsce:** 15% zebranej kwoty
+    * 💡 *Pamiętaj: wygrana ma charakter symboliczny, gramy przede wszystkim dla świetnej zabawy!*
 
     ---
 
