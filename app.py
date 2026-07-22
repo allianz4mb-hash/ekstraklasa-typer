@@ -9,6 +9,26 @@ st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide
 
 db = database.init_supabase()
 
+
+# --- AUTOMATYCZNA SYNCHRONIZACJA W TLE CO 30 MINUT ---
+@st.cache_data(ttl=1800, show_spinner=False)
+def automatyczna_synchronizacja():
+  try:
+    liga_info = api.pobierz_ligę_ekstraklasa()
+    if liga_info:
+      seasons = liga_info.get("seasons", [])
+      current_season = max([s["season"] for s in seasons]) if seasons else 2026
+      league_id = liga_info.get("id")
+      surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
+      if surowe_mecze:
+        database.synchronizuj_mecze_wsadowo(surowe_mecze)
+  except Exception:
+    pass
+
+
+# Wywołujemy cichą synchronizację przy otwarciu aplikacji
+automatyczna_synchronizacja()
+
 # --- ZARZĄDZANIE SESJĄ LOGOWANIA ---
 if "zalogowany_gracz" not in st.session_state:
   st.session_state["zalogowany_gracz"] = None
@@ -28,7 +48,12 @@ if not st.session_state["zalogowany_gracz"]:
       wybrany_gracz_do_logowania = st.selectbox(
           "Wybierz gracza:", dostepni_gracze, key="login_select"
       )
-      wpisany_pin = st.text_input("Wpisz PIN:", type="password", key="login_pin")
+      wpisany_pin = st.text_input(
+          "Wpisz 4-cyfrowy PIN:",
+          type="password",
+          max_chars=4,
+          key="login_pin",
+      )
 
       if st.button("🔑 Zaloguj się", use_container_width=True):
         if database.weryfikuj_pin_gracza(
@@ -44,9 +69,18 @@ if not st.session_state["zalogowany_gracz"]:
 
   with tab_register:
     nowy_nick = st.text_input("Nick / Imię:", key="reg_nick")
-    nowy_pin = st.text_input("Ustal PIN:", type="password", key="reg_pin")
+    nowy_pin = st.text_input(
+        "Ustal 4-cyfrowy PIN:",
+        type="password",
+        max_chars=4,
+        key="reg_pin",
+        help="PIN musi składać się z 4 cyfr (np. 1234)",
+    )
     powtorz_pin = st.text_input(
-        "Powtórz PIN:", type="password", key="reg_pin_repeat"
+        "Powtórz 4-cyfrowy PIN:",
+        type="password",
+        max_chars=4,
+        key="reg_pin_repeat",
     )
 
     if st.button("✨ Zarejestruj się", use_container_width=True):
@@ -78,7 +112,7 @@ wybrany_gracz = st.session_state["zalogowany_gracz"]
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Zarządzanie ligą")
 
-if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
+if st.sidebar.button("🔄 Wymuś synchronizację z API"):
   with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
 
