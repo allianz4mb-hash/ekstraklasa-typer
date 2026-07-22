@@ -4,10 +4,20 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 from supabase import create_client
 
-# Bezpośrednia inicjalizacja kluczy Supabase ze st.secrets
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-db = create_client(url, key)
+db = None
+
+
+def init_supabase():
+  global db
+  if db is None:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    db = create_client(url, key)
+  return db
+
+
+# Inicjalizujemy bazę przy starcie modułu
+init_supabase()
 
 
 def haszuj_pin(pin: str) -> str:
