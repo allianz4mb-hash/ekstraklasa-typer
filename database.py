@@ -219,3 +219,32 @@ def zapisz_typy_gracza(paczka_typow):
   except Exception as e:
     st.error(f"Błąd zapisu typów: {e}")
     return False
+
+
+def zmien_nick_gracza(stary_nick, nowy_nick):
+  """Zmienia nick gracza w tabeli 'gracze' oraz we wszystkich jego dotychczasowych typach w 'typy'."""
+  try:
+    nowy_nick = nowy_nick.strip()
+    if not nowy_nick:
+      return False, "Nick nie może być pusty!"
+
+    # 1. Sprawdzamy, czy nowy nick nie jest już zajęty przez kogoś innego
+    res = (
+        db.table("gracze").select("*").eq("nick", nowy_nick).execute()
+    )
+    if res.data:
+      return False, "Podany nick jest już zajęty!"
+
+    # 2. Aktualizujemy nick w tabeli gracze
+    db.table("gracze").update({"nick": nowy_nick}).eq(
+        "nick", stary_nick
+    ).execute()
+
+    # 3. Przepisujemy dotychczasowe typy na nowy nick (żeby nie stracić punktów)
+    db.table("typy").update({"gracz_nick": nowy_nick}).eq(
+        "gracz_nick", stary_nick
+    ).execute()
+
+    return True, "Nick został pomyślnie zmieniony!"
+  except Exception as e:
+    return False, f"Błąd podczas zmiany nicku: {str(e)}"
