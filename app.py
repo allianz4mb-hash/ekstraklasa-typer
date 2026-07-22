@@ -346,10 +346,8 @@ with tab_ranking:
   wszystkie_typy = database.pobierz_wszystkie_typy()
   lista_graczy = database.pobierz_liste_graczy()
 
-  # Słownik meczów dla szybkiego wyszukiwania wyników
   slownik_meczow = {m["id"]: m for m in wszystkie_mecze}
 
-  # Inicjalizacja statystyk dla każdego gracza
   statystyki_graczy = {
       gracz: {
           "Punkty": 0,
@@ -372,13 +370,12 @@ with tab_ranking:
       wynik_str = mecz.get("wynik")
       status = str(mecz.get("status")).lower()
 
-      # Liczymy punkty jeśli mecz się zakończył i podano wynik
       if status in [
           "ended",
           "finished",
           "ft",
           "full time",
-          "after et",,
+          "after et",
       ] or (wynik_str and ":" in str(wynik_str) and wynik_str != "- : -"):
         real_h = mecz.get("gole_gospodarze", 0)
         real_a = mecz.get("gole_goscie", 0)
@@ -392,7 +389,6 @@ with tab_ranking:
         elif pts == 1:
           statystyki_graczy[gracz]["Rozstrzygnięcia (1 pkt)"] += 1
 
-  # Przygotowanie i sortowanie tabeli
   tabela_data = []
   for gracz, stats in statystyki_graczy.items():
     tabela_data.append({
@@ -406,7 +402,6 @@ with tab_ranking:
   df = pd.DataFrame(tabela_data)
 
   if not df.empty:
-    # Sortowanie: 1. Punkty, 2. Liczba dokładnych trafień (3 pkt), 3. Liczba rozstrzygnięć (1 pkt)
     df = df.sort_values(
         by=[
             "Punkty",
@@ -416,7 +411,6 @@ with tab_ranking:
         ascending=[False, False, False],
     ).reset_index(drop=True)
 
-    # Dodanie medali do pozycji
     pozycje = []
     for idx in range(len(df)):
       if idx == 0:
