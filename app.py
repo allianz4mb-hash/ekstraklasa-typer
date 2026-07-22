@@ -7,9 +7,7 @@ from views.ranking import render_ranking
 from views.regulamin import render_regulamin
 from views.typowanie import render_typowanie
 
-st.set_page_config(
-    page_title="Ekstraklapa Typer", page_icon="⚽", layout="wide"
-)
+st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide")
 
 db = database.init_supabase()
 
@@ -48,12 +46,7 @@ lista_klubow = ["— Brak —"] + sorted(list(kluby_mapa.keys()))
 if "zalogowany_gracz" not in st.session_state:
   st.session_state["zalogowany_gracz"] = None
 
-
-# --- GŁÓWNE LOGO PKO BP EKSTRAKLAPA (HTML/CSS) ---
-header_logo_html = '<div style="text-align: center; margin-bottom: 25px;"><img src="https://vhy-pko.football-api.com/logo-pko.png" style="max-width: 280px; height: auto;" onerror="this.onerror=null; this.src=\'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/PKO_Bank_Polski_logo.svg/1200px-PKO_Bank_Polski_logo.svg.png\';"><div style="font-family: \'Montserrat\', \'Arial Black\', sans-serif; font-weight: 300; font-size: 22px; color: #111111; letter-spacing: 1px; margin-top: 10px;">PKO Bank Polski</div><div style="font-family: \'Montserrat\', \'Arial Black\', sans-serif; font-weight: 900; font-size: 38px; color: #000000; letter-spacing: 3px; line-height: 1.1; text-transform: uppercase;">EKSTRAKLAPA <span style="font-size: 22px; color: #00f2ff; background: #0b0e14; padding: 2px 10px; border-radius: 6px; vertical-align: middle;">TYPER 2026/27</span></div></div>'
-
-st.markdown(header_logo_html, unsafe_allow_html=True)
-
+st.title("⚽ Ekstraklasa Typer 2026/2027")
 
 # --- PANEL BOCZNY ---
 st.sidebar.header("👤 Panel Gracza")
