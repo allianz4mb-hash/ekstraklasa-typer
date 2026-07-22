@@ -30,6 +30,18 @@ def automatyczna_synchronizacja():
 
 automatyczna_synchronizacja()
 
+# Pobieramy mecze do listy klubów
+try:
+  res_mecze = (
+      db.table("mecze").select("*").order("data_meczu", desc=False).execute()
+  )
+  wszystkie_mecze = res_mecze.data
+except Exception:
+  wszystkie_mecze = []
+
+kluby_mapa = database.pobierz_mapa_klubow_logo(wszystkie_mecze)
+lista_klubow = ["— Brak —"] + sorted(list(kluby_mapa.keys()))
+
 # --- ZARZĄDZANIE SESJĄ ---
 if "zalogowany_gracz" not in st.session_state:
   st.session_state["zalogowany_gracz"] = None
@@ -70,12 +82,15 @@ if not st.session_state["zalogowany_gracz"]:
 
   with tab_register:
     nowy_nick = st.text_input("Nick / Imię:", key="reg_nick")
+    wybrany_klub = st.selectbox(
+        "Ulubiony klub:", lista_klubow, key="reg_klub"
+    )
     nowy_pin = st.text_input(
         "Ustal 4-cyfrowy PIN:",
         type="password",
         max_chars=4,
         key="reg_pin",
-        help="PIN musi składać się z 4 cyfr (np. 1234)",
+        help="PIN musi składać się z 4 cyfr",
     )
     powtorz_pin = st.text_input(
         "Powtórz 4-cyfrowy PIN:",
@@ -92,7 +107,10 @@ if not st.session_state["zalogowany_gracz"]:
       elif nowy_pin != powtorz_pin:
         st.error("Wpisane PIN-y nie są identyczne!")
       else:
-        sukces, komunikat = database.zarejestruj_gracza(nowy_nick, nowy_pin)
+        klub_val = "" if wybrany_klub == "— Brak —" else wybrany_klub
+        sukces, komunikat = database.zarejestruj_gracza(
+            nowy_nick, nowy_pin, klub_val
+        )
         if sukces:
           st.success(komunikat)
           st.session_state["zalogowany_gracz"] = nowy_nick.strip()
@@ -139,7 +157,6 @@ if st.sidebar.button("🔄 Wymuś synchronizację z API", use_container_width=Tr
     else:
       st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
-# Podgląd czasu ostatniej synchronizacji z bazy Supabase
 czas_synchro = database.pobierz_czas_synchro()
 st.sidebar.caption(f"⏱️ **Ostatnia synchro:** {czas_synchro}")
 
@@ -152,14 +169,6 @@ tab_typowanie, tab_ranking, tab_matryca, tab_profil, tab_regulamin = st.tabs([
     "📜 Regulamin",
 ])
 
-try:
-  res_mecze = (
-      db.table("mecze").select("*").order("data_meczu", desc=False).execute()
-  )
-  wszystkie_mecze = res_mecze.data
-except Exception:
-  wszystkie_mecze = []
-
 with tab_typowanie:
   render_typowanie(wszystkie_mecze, wybrany_gracz)
 
@@ -170,7 +179,7 @@ with tab_matryca:
   render_matryca(wszystkie_mecze, wybrany_gracz)
 
 with tab_profil:
-  render_profil(wybrany_gracz)
+  render_profil(wybrany_gracz, wszystkie_mecze)
 
 with tab_regulamin:
   render_regulamin()
