@@ -11,7 +11,7 @@ st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide
 db = database.init_supabase()
 
 
-# --- AUTOMATYCZNA SYNCHRONIZACJA W TLE CO 30 MINUT ---
+# --- AUTOMATYCZNA SYNCHRONIZACJA W TLE (MAX RAZ NA 30 MINUT) ---
 @st.cache_data(ttl=1800, show_spinner=False)
 def automatyczna_synchronizacja():
   try:
@@ -27,6 +27,7 @@ def automatyczna_synchronizacja():
     pass
 
 
+# Wywołanie automatycznej synchronizacji przy wejściu użytkownika
 automatyczna_synchronizacja()
 
 # --- ZARZĄDZANIE SESJĄ LOGOWANIA ---
@@ -113,6 +114,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Zarządzanie ligą")
 
 if st.sidebar.button("🔄 Wymuś synchronizację z API", use_container_width=True):
+  st.cache_data.clear()  # Czyszczenie pamięci podręcznej, aby wymusić pobranie
   with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
 
@@ -137,7 +139,7 @@ if st.sidebar.button("🔄 Wymuś synchronizację z API", use_container_width=Tr
     else:
       st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
-# Podgląd czasu ostatniej synchronizacji
+# Podgląd czasu ostatniej synchronizacji z bazy Supabase
 czas_synchro = database.pobierz_czas_synchro()
 st.sidebar.caption(f"⏱️ **Ostatnia synchro:** {czas_synchro}")
 
