@@ -1,10 +1,9 @@
-from datetime import datetime
-import re
-from zoneinfo import ZoneInfo
 import api
 import database
-import pandas as pd
 import streamlit as st
+from views.matryca import render_matryca
+from views.ranking import render_ranking
+from views.typowanie import render_typowanie
 
 st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide")
 
@@ -14,63 +13,9 @@ db = database.init_supabase()
 if "zalogowany_gracz" not in st.session_state:
   st.session_state["zalogowany_gracz"] = None
 
-
-def pobierz_czas_pl(data_str):
-  if not data_str:
-    return None
-  try:
-    val_str = str(data_str)
-    if val_str.endswith("Z"):
-      val_str = val_str[:-1] + "+00:00"
-
-    dt_utc = datetime.fromisoformat(val_str)
-    return dt_utc.astimezone(ZoneInfo("Europe/Warsaw"))
-  except Exception:
-    return None
-
-
-def formatuj_date(data_str):
-  dt_pl = pobierz_czas_pl(data_str)
-  if dt_pl:
-    return dt_pl.strftime("📅 %d.%m.%Y, godz. %H:%M")
-  return f"📅 {data_str}"
-
-
-def czy_mecz_zablokowany(data_str, status_meczu):
-  status_clean = str(status_meczu).lower()
-  if status_clean not in ["not started", "ns", "scheduled", ""]:
-    return True
-
-  dt_mecz_pl = pobierz_czas_pl(data_str)
-  if dt_mecz_pl:
-    teraz_pl = datetime.now(ZoneInfo("Europe/Warsaw"))
-    if teraz_pl >= dt_mecz_pl:
-      return True
-
-  return False
-
-
-def oblicz_punkty_za_mecz(typ_gosp, typ_gosc, real_gosp, real_gosc):
-  """Silnik punktacji: 3 pkt za dokładny wynik, 1 pkt za rozstrzygnięcie, 0 pkt w pozostałych przypadkach."""
-  if typ_gosp == real_gosp and typ_gosc == real_gosc:
-    return 3
-
-  diff_typ = typ_gosp - typ_gosc
-  diff_real = real_gosp - real_gosc
-
-  if (
-      (diff_typ > 0 and diff_real > 0)
-      or (diff_typ < 0 and diff_real < 0)
-      or (diff_typ == 0 and diff_real == 0)
-  ):
-    return 1
-
-  return 0
-
-
 st.title("⚽ Ekstraklasa Typer 2026/2027")
 
-# --- PANEL BOCZNY ---
+# --- PANEL BOCZNY: LOGOWANIE I REJESTRACJA ---
 st.sidebar.header("👤 Panel Gracza")
 
 dostepni_gracze = database.pobierz_liste_graczy()
@@ -158,9 +103,9 @@ if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
     else:
       st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
-# --- GŁÓWNY WIDOK Z ZAKŁADKAMI ---
-tab_typowanie, tab_ranking = st.tabs(
-    ["🎯 Formularz Typowania", "🏆 Tabela / Ranking"]
+# --- WCHODZENIE W ZAKŁADKI ---
+tab_typowanie, tab_ranking, tab_matryca = st.tabs(
+    ["🎯 Formularz Typowania", "🏆 Tabela / Ranking", "👁️ Podgląd Typów"]
 )
 
 try:
@@ -171,259 +116,11 @@ try:
 except Exception:
   wszystkie_mecze = []
 
-# --- ZAKŁADKA 1: FORMULARZ TYPOWANIA ---
 with tab_typowanie:
-  st.header("🎯 Formularz Typowania")
+  render_typowanie(wszystkie_mecze, wybrany_gracz)
 
-  if not wszystkie_mecze:
-    st.info(
-        "Brak meczów w bazie. Kliknij **'Synchronizuj terminarz z API'** w"
-        " panelu bocznym!"
-    )
-  else:
-
-    def wyciagnij_numer_kolejki(nazwa_kolejki):
-      cyfry = re.findall(r"\d+", nazwa_kolejki)
-      return int(cyfry[0]) if cyfry else 0
-
-    kolejki = sorted(
-        list(set(m["kolejka"] for m in wszystkie_mecze)),
-        key=wyciagnij_numer_kolejki,
-    )
-    wybrana_kolejka = st.selectbox("Wybierz kolejkę do wytypowania:", kolejki)
-
-    mecze_w_kolejce = [
-        m for m in wszystkie_mecze if m["kolejka"] == wybrana_kolejka
-    ]
-
-    dotychczasowe_typy = (
-        database.pobierz_typy_gracza(wybrany_gracz) if wybrany_gracz else {}
-    )
-
-    if not wybrany_gracz:
-      st.warning(
-          "🔒 Zaloguj się lub zarejestruj w panelu bocznym po lewej stronie,"
-          " aby typować!"
-      )
-
-    with st.form("formularz_typowania"):
-      nowe_typy = {}
-
-      for mecz in mecze_w_kolejce:
-        mecz_id = mecz["id"]
-        zapisany_typ = dotychczasowe_typy.get(mecz_id, None)
-
-        data_f = formatuj_date(mecz.get("data_meczu"))
-        zablokowany = czy_mecz_zablokowany(
-            mecz.get("data_meczu"), mecz.get("status")
-        )
-
-        col_header1, col_header2 = st.columns([2, 2])
-        with col_header1:
-          st.caption(f"⏱️ {data_f}")
-
-        with col_header2:
-          if zablokowany:
-            if zapisany_typ is not None:
-              st.markdown(
-                  f"<div style='text-align: right; color: #d32f2f; font-weight:"
-                  f" bold;'>🔒 Zamknięte (Twój typ: {zapisany_typ[0]} -"
-                  f" {zapisany_typ[1]})</div>",
-                  unsafe_allow_html=True,
-              )
-            else:
-              st.markdown(
-                  "<div style='text-align: right; color: #d32f2f; font-weight:"
-                  " bold;'>🔒 Zamknięte (Brak typu)</div>",
-                  unsafe_allow_html=True,
-              )
-          else:
-            if zapisany_typ is not None:
-              st.markdown(
-                  f"<div style='text-align: right; color: #2e7d32; font-weight:"
-                  f" bold;'>🟢 Obstawiono: {zapisany_typ[0]} -"
-                  f" {zapisany_typ[1]}</div>",
-                  unsafe_allow_html=True,
-              )
-            else:
-              st.markdown(
-                  "<div style='text-align: right; color: #888888;'>⚪ Brak"
-                  " typu</div>",
-                  unsafe_allow_html=True,
-              )
-
-        col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 3])
-
-        logo_h = mecz.get("logo_gospodarze")
-        logo_a = mecz.get("logo_goscie")
-
-        with col1:
-          if logo_h:
-            st.markdown(
-                f"<div style='display: flex; align-items: center; gap:"
-                f" 10px;'><img src='{logo_h}' width='28' height='28'/>"
-                f" <b>{mecz['gospodarze']}</b></div>",
-                unsafe_allow_html=True,
-            )
-          else:
-            st.write(f"**{mecz['gospodarze']}**")
-
-        domyslna_gosp = int(zapisany_typ[0]) if zapisany_typ is not None else 0
-        domyslna_gosc = int(zapisany_typ[1]) if zapisany_typ is not None else 0
-
-        disabled_flag = (not wybrany_gracz) or zablokowany
-
-        with col2:
-          typ_gosp = st.number_input(
-              "Gospodarze",
-              min_value=0,
-              max_value=15,
-              value=domyslna_gosp,
-              key=f"gosp_{mecz_id}",
-              label_visibility="collapsed",
-              disabled=disabled_flag,
-          )
-
-        with col3:
-          st.markdown(
-              "<h4 style='text-align: center; margin: 0;'>:</h4>",
-              unsafe_allow_html=True,
-          )
-
-        with col4:
-          typ_gosc = st.number_input(
-              "Goście",
-              min_value=0,
-              max_value=15,
-              value=domyslna_gosc,
-              key=f"gosc_{mecz_id}",
-              label_visibility="collapsed",
-              disabled=disabled_flag,
-          )
-
-        with col5:
-          if logo_a:
-            st.markdown(
-                f"<div style='display: flex; align-items: center; gap:"
-                f" 10px;'><img src='{logo_a}' width='28' height='28'/>"
-                f" <b>{mecz['goscie']}</b></div>",
-                unsafe_allow_html=True,
-            )
-          else:
-            st.write(f"**{mecz['goscie']}**")
-
-        st.markdown("---")
-
-        if wybrany_gracz and not zablokowany:
-          nowe_typy[mecz_id] = {
-              "gracz_nick": wybrany_gracz,
-              "mecz_id": mecz_id,
-              "typ_gospodarze": typ_gosp,
-              "typ_goscie": typ_gosc,
-          }
-
-      zapisz_button = st.form_submit_button(
-          "💾 Zapisz moje typy na tę kolejkę",
-          use_container_width=True,
-          type="primary",
-          disabled=not wybrany_gracz,
-      )
-
-      if zapisz_button and wybrany_gracz:
-        paczka_do_zapisu = list(nowe_typy.values())
-        if paczka_do_zapisu:
-          sukces = database.zapisz_typy_gracza(paczka_do_zapisu)
-          if sukces:
-            st.success("✅ Pomyślnie zapisano Twoje typy!")
-            st.rerun()
-        else:
-          st.info("Brak aktywnych meczów do zapisania w tej kolejce.")
-
-# --- ZAKŁADKA 2: TABELA / RANKING GRACZY ---
 with tab_ranking:
-  st.header("🏆 Tabela Ligi / Klasyfikacja Generalna")
+  render_ranking(wszystkie_mecze)
 
-  wszystkie_typy = database.pobierz_wszystkie_typy()
-  lista_graczy = database.pobierz_liste_graczy()
-
-  slownik_meczow = {m["id"]: m for m in wszystkie_mecze}
-
-  statystyki_graczy = {
-      gracz: {
-          "Punkty": 0,
-          "Trafienia (3 pkt)": 0,
-          "Rozstrzygnięcia (1 pkt)": 0,
-          "Liczba typów": 0,
-      }
-      for gracz in lista_graczy
-  }
-
-  for typ in wszystkie_typy:
-    gracz = typ.get("gracz_nick")
-    mecz_id = typ.get("mecz_id")
-    typ_h = typ.get("typ_gospodarze")
-    typ_a = typ.get("typ_goscie")
-
-    mecz = slownik_meczow.get(mecz_id)
-
-    if mecz and gracz in statystyki_graczy:
-      wynik_str = mecz.get("wynik")
-      status = str(mecz.get("status")).lower()
-
-      if status in [
-          "ended",
-          "finished",
-          "ft",
-          "full time",
-          "after et",
-      ] or (wynik_str and ":" in str(wynik_str) and wynik_str != "- : -"):
-        real_h = mecz.get("gole_gospodarze", 0)
-        real_a = mecz.get("gole_goscie", 0)
-
-        pts = oblicz_punkty_za_mecz(typ_h, typ_a, real_h, real_a)
-
-        statystyki_graczy[gracz]["Punkty"] += pts
-        statystyki_graczy[gracz]["Liczba typów"] += 1
-        if pts == 3:
-          statystyki_graczy[gracz]["Trafienia (3 pkt)"] += 1
-        elif pts == 1:
-          statystyki_graczy[gracz]["Rozstrzygnięcia (1 pkt)"] += 1
-
-  tabela_data = []
-  for gracz, stats in statystyki_graczy.items():
-    tabela_data.append({
-        "Gracz": gracz,
-        "Punkty": stats["Punkty"],
-        "🎯 Trafienia (3 pkt)": stats["Trafienia (3 pkt)"],
-        "👍 Rozstrzygnięcia (1 pkt)": stats["Rozstrzygnięcia (1 pkt)"],
-        "📊 Obstawione mecze": stats["Liczba typów"],
-    })
-
-  df = pd.DataFrame(tabela_data)
-
-  if not df.empty:
-    df = df.sort_values(
-        by=[
-            "Punkty",
-            "🎯 Trafienia (3 pkt)",
-            "👍 Rozstrzygnięcia (1 pkt)",
-        ],
-        ascending=[False, False, False],
-    ).reset_index(drop=True)
-
-    pozycje = []
-    for idx in range(len(df)):
-      if idx == 0:
-        pozycje.append("🥇 1")
-      elif idx == 1:
-        pozycje.append("🥈 2")
-      elif idx == 2:
-        pozycje.append("🥉 3")
-      else:
-        pozycje.append(f"  {idx + 1}")
-
-    df.insert(0, "Pozycja", pozycje)
-
-    st.dataframe(df, use_container_width=True, hide_index=True)
-  else:
-    st.info("Brak danych do wyświetlenia w tabeli.")
+with tab_matryca:
+  render_matryca(wszystkie_mecze, wybrany_gracz)
