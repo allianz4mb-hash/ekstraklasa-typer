@@ -100,13 +100,25 @@ def render_typowanie(wszystkie_mecze, wybrany_gracz):
 
       disabled_flag = (not wybrany_gracz) or zablokowany
 
+      # Dynamiczny klucz zawierający nick gracza chroni przed przeskakiwaniem wartości
+      key_gosp = (
+          f"gosp_{wybrany_gracz}_{mecz_id}"
+          if wybrany_gracz
+          else f"gosp_anon_{mecz_id}"
+      )
+      key_gosc = (
+          f"gosc_{wybrany_gracz}_{mecz_id}"
+          if wybrany_gracz
+          else f"gosc_anon_{mecz_id}"
+      )
+
       with col2:
         typ_gosp = st.number_input(
             "Gospodarze",
             min_value=0,
             max_value=15,
             value=domyslna_gosp,
-            key=f"gosp_{mecz_id}",
+            key=key_gosp,
             label_visibility="collapsed",
             disabled=disabled_flag,
         )
@@ -123,7 +135,7 @@ def render_typowanie(wszystkie_mecze, wybrany_gracz):
             min_value=0,
             max_value=15,
             value=domyslna_gosc,
-            key=f"gosc_{mecz_id}",
+            key=key_gosc,
             label_visibility="collapsed",
             disabled=disabled_flag,
         )
