@@ -1,4 +1,5 @@
 import os
+import re
 import streamlit as st
 from supabase import Client, create_client
 
@@ -42,6 +43,10 @@ def zarejestruj_gracza(nick: str, pin: str):
 
   if not nick_clean or not pin_clean:
     return False, "Nick i PIN nie mogą być puste!"
+
+  # Wymóg: dokładnie 4 cyfry
+  if not re.match(r"^\d{4}$", pin_clean):
+    return False, "PIN musi składać się z dokładnie 4 cyfr (np. 1234)!"
 
   try:
     res = (
@@ -97,7 +102,6 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
       status = state_info.get("description", "Not started")
       score = state_info.get("score", {}).get("current") or "- : -"
 
-      # Odczytujemy dokładną liczbę goli z wyniku API jeśli mecz minął/trwa
       gole_h = 0
       gole_a = 0
       if score and ":" in str(score) and str(score) != "- : -":
@@ -148,7 +152,6 @@ def pobierz_typy_gracza(gracz_nick: str):
 
 
 def pobierz_wszystkie_typy():
-  """Pobiera wszystkie typy wszystkich graczy na potrzeby tabeli rankingowej."""
   try:
     res = supabase.table("typy").select("*").execute()
     return res.data
