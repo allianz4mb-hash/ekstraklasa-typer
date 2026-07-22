@@ -113,48 +113,69 @@ def zapisz_typy_gracza(lista_typow):
 
 
 def synchronizuj_mecze_wsadowo(surowe_mecze):
-  rekordy = []
-  for m in surowe_mecze:
-    data_iso = m.get("fixture", {}).get("date", "")
-    kolejka_str = m.get("league", {}).get("round", "Kolejka 1")
+  try:
+    if not surowe_mecze:
+      return False
 
-    rekordy.append({
-        "id": m["fixture"]["id"],
-        "kolejka": kolejka_str,
-        "data_meczu": data_iso,
-        "gospodarze": m["teams"]["home"]["name"],
-        "goscie": m["teams"]["away"]["name"],
-        "logo_gospodarze": m["teams"]["home"]["logo"],
-        "logo_goscie": m["teams"]["away"]["logo"],
-        "gole_gospodarze": m["goals"]["home"],
-        "gole_goscie": m["goals"]["away"],
-        "status": m["fixture"]["status"]["short"],
-        "wynik": (
-            f"{m['goals']['home']} : {m['goals']['away']}"
-            if m["goals"]["home"] is not None
-            else "- : -"
-        ),
-    })
+    rekordy = []
+    for m in surowe_mecze:
+      fixture = m.get("fixture", {})
+      if not fixture or "id" not in fixture:
+        continue
 
-  db.table("mecze").upsert(rekordy, on_conflict="id").execute()
+      league = m.get("league", {})
+      teams = m.get("teams", {})
+      goals = m.get("goals", {})
 
-  teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
-      "%d.%m.%Y %H:%M:%S"
-  )
-  db.table("ustawienia").upsert(
-      {"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa},
-      on_conflict="klucz",
-  ).execute()
-  return True
+      home_team = teams.get("home", {})
+      away_team = teams.get("away", {})
+      status_fixture = fixture.get("status", {})
+
+      gole_h = goals.get("home")
+      gole_a = goals.get("away")
+
+      rekordy.append({
+          "id": fixture.get("id"),
+          "kolejka": league.get("round", "Kolejka 1"),
+          "data_meczu": fixture.get("date", ""),
+          "gospodarze": home_team.get("name", "Gospodarz"),
+          "goscie": away_team.get("name", "Gość"),
+          "logo_gospodarze": home_team.get("logo", ""),
+          "logo_goscie": away_team.get("logo", ""),
+          "gole_gospodarze": gole_h,
+          "gole_goscie": gole_a,
+          "status": status_fixture.get("short", "NS"),
+          "wynik": (
+              f"{gole_h} : {gole_a}" if gole_h is not None else "- : -"
+          ),
+      })
+
+    if rekordy:
+      db.table("mecze").upsert(rekordy, on_conflict="id").execute()
+
+      teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
+          "%d.%m.%Y %H:%M:%S"
+      )
+      db.table("ustawienia").upsert(
+          {"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa},
+          on_conflict="klucz",
+      ).execute()
+      return True
+    return False
+  except Exception:
+    return False
 
 
 def pobierz_czas_synchro():
-  res = (
-      db.table("ustawienia")
-      .select("wartosc")
-      .eq("klucz", "ostatnia_synchro")
-      .execute()
-  )
-  if res.data:
-    return res.data[0]["wartosc"]
-  return "Brak danych"
+  try:
+    res = (
+        db.table("ustawienia")
+        .select("wartosc")
+        .eq("klucz", "ostatnia_synchro")
+        .execute()
+    )
+    if res.data:
+      return res.data[0]["wartosc"]
+    return "Brak danych"
+  except Exception:
+    return "Brak danych"
