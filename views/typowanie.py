@@ -4,19 +4,26 @@ import database
 import streamlit as st
 
 
-def formatuj_nazwe_kolejki(kolejka_raw):
-  """Zamienia np. 'Regular Season - 1' na '1. Kolejka PKO BP Ekstraklapy'."""
+def wyciagnij_nr_kolejki(kolejka_raw):
+  """Wyciąga czystą liczbę z tekstu np. 'Regular Season - 10' -> 10 do prawidłowego sortowania."""
   if not kolejka_raw:
-    return "1. Kolejka PKO BP Ekstraklapy"
-
-  # Jeśli ciąg zawiera separator '-', wyciągamy sam numer z końca
-  if "-" in kolejka_raw:
-    parts = kolejka_raw.split("-")
+    return 0
+  if "-" in str(kolejka_raw):
+    parts = str(kolejka_raw).split("-")
     nr = parts[-1].strip()
     if nr.isdigit():
-      return f"{nr}. Kolejka PKO BP Ekstraklapy"
+      return int(nr)
+  if str(kolejka_raw).isdigit():
+    return int(kolejka_raw)
+  return 999
 
-  return kolejka_raw
+
+def formatuj_nazwe_kolejki(kolejka_raw):
+  """Zamienia np. 'Regular Season - 1' na '1. Kolejka PKO BP Ekstraklapy'."""
+  nr = wyciagnij_nr_kolejki(kolejka_raw)
+  if nr != 999 and nr != 0:
+    return f"{nr}. Kolejka PKO BP Ekstraklapy"
+  return str(kolejka_raw)
 
 
 def daj_klimatyczny_naglowek(data_iso_str):
@@ -66,11 +73,11 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
     st.warning("Brak meczów w bazie danych. Wykonaj synchronizację w panelu.")
     return
 
-  # Tworzymy mapowanie surowych nazw kolejek z API na ładne nazwy polskie
-  surowe_kolejki = sorted(
-      list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
-  )
-  mapa_kolejek = {k: formatuj_nazwe_kolejki(k) for kk in [surowe_kolejki] for k in kk}
+  # PRAWIDŁOWE SORTOWANIE NUMERYCZNE
+  surowe_kolejki = list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
+  surowe_kolejki = sorted(surowe_kolejki, key=wyciagnij_nr_kolejki)
+
+  mapa_kolejek = {k: formatuj_nazwe_kolejki(k) for k in surowe_kolejki}
 
   wybrana_kolejka_raw = st.selectbox(
       "Wybierz kolejkę do wytypowania:",
