@@ -33,9 +33,6 @@ automatyczna_synchronizacja()
 if "zalogowany_gracz" not in st.session_state:
   st.session_state["zalogowany_gracz"] = None
 
-# Pobieramy nick domyślny zapamiętany na tym urządzeniu
-zapamietany_nick = st.query_params.get("gracz", "")
-
 st.title("⚽ Ekstraklasa Typer 2026/2027")
 
 # --- PANEL BOCZNY ---
@@ -48,81 +45,59 @@ if not st.session_state["zalogowany_gracz"]:
 
   with tab_login:
     if dostepni_gracze:
-      with st.form("form_logowania"):
-        # Standardowe pole tekstowe aktywuje wykrywanie formularza logowania przez iOS Safari (FaceID)
-        wpisany_nick = st.text_input(
-            "Nick / Imię:",
-            value=zapamietany_nick,
-            key="login_nick_input",
-            placeholder="Wpisz swój nick",
-        )
-        wpisany_pin = st.text_input(
-            "4-cyfrowy PIN:",
-            type="password",
-            max_chars=4,
-            key="login_pin_input",
-        )
+      wybrany_gracz_do_logowania = st.selectbox(
+          "Wybierz gracza:", dostepni_gracze, key="login_select"
+      )
+      wpisany_pin = st.text_input(
+          "Wpisz 4-cyfrowy PIN:",
+          type="password",
+          max_chars=4,
+          key="login_pin",
+      )
 
-        btn_login = st.form_submit_button(
-            "🔑 Zaloguj się", use_container_width=True, type="primary"
-        )
-
-        if btn_login:
-          nick_clean = wpisany_nick.strip()
-          if not nick_clean:
-            st.error("Wpisz swój nick!")
-          elif database.weryfikuj_pin_gracza(nick_clean, wpisany_pin):
-            st.session_state["zalogowany_gracz"] = nick_clean
-            # Zapamiętujemy Twój nick na Twoim urządzeniu
-            st.query_params["gracz"] = nick_clean
-            st.success("Zalogowano pomyślnie!")
-            st.rerun()
-          else:
-            st.error("❌ Nieprawidłowy nick lub PIN!")
-
-      # Ściągawka z listą graczy na wypadek gdyby ktoś zapomniał jak dokładnie zapisał swój nick
-      with st.expander("📋 Lista zarejestrowanych graczy"):
-        st.write(", ".join(dostepni_gracze))
+      if st.button("🔑 Zaloguj się", use_container_width=True):
+        if database.weryfikuj_pin_gracza(
+            wybrany_gracz_do_logowania, wpisany_pin
+        ):
+          st.session_state["zalogowany_gracz"] = wybrany_gracz_do_logowania
+          st.success("Zalogowano pomyślnie!")
+          st.rerun()
+        else:
+          st.error("❌ Nieprawidłowy PIN!")
     else:
       st.info("Brak graczy w bazie. Zarejestruj się obok!")
 
   with tab_register:
-    with st.form("form_rejestracji"):
-      nowy_nick = st.text_input("Nick / Imię:", key="reg_nick")
-      nowy_pin = st.text_input(
-          "Ustal 4-cyfrowy PIN:",
-          type="password",
-          max_chars=4,
-          key="reg_pin",
-          help="PIN musi składać się z 4 cyfr (np. 1234)",
-      )
-      powtorz_pin = st.text_input(
-          "Powtórz 4-cyfrowy PIN:",
-          type="password",
-          max_chars=4,
-          key="reg_pin_repeat",
-      )
+    nowy_nick = st.text_input("Nick / Imię:", key="reg_nick")
+    nowy_pin = st.text_input(
+        "Ustal 4-cyfrowy PIN:",
+        type="password",
+        max_chars=4,
+        key="reg_pin",
+        help="PIN musi składać się z 4 cyfr (np. 1234)",
+    )
+    powtorz_pin = st.text_input(
+        "Powtórz 4-cyfrowy PIN:",
+        type="password",
+        max_chars=4,
+        key="reg_pin_repeat",
+    )
 
-      btn_reg = st.form_submit_button(
-          "✨ Zarejestruj się", use_container_width=True, type="primary"
-      )
-
-      if btn_reg:
-        if not nowy_nick.strip():
-          st.error("Podaj swój nick!")
-        elif not nowy_pin.strip():
-          st.error("Ustal PIN!")
-        elif nowy_pin != powtorz_pin:
-          st.error("Wpisane PIN-y nie są identyczne!")
+    if st.button("✨ Zarejestruj się", use_container_width=True):
+      if not nowy_nick.strip():
+        st.error("Podaj swój nick!")
+      elif not nowy_pin.strip():
+        st.error("Ustal PIN!")
+      elif nowy_pin != powtorz_pin:
+        st.error("Wpisane PIN-y nie są identyczne!")
+      else:
+        sukces, komunikat = database.zarejestruj_gracza(nowy_nick, nowy_pin)
+        if sukces:
+          st.success(komunikat)
+          st.session_state["zalogowany_gracz"] = nowy_nick.strip()
+          st.rerun()
         else:
-          sukces, komunikat = database.zarejestruj_gracza(nowy_nick, nowy_pin)
-          if sukces:
-            st.success(komunikat)
-            st.session_state["zalogowany_gracz"] = nowy_nick.strip()
-            st.query_params["gracz"] = nowy_nick.strip()
-            st.rerun()
-          else:
-            st.error(komunikat)
+          st.error(komunikat)
 
 else:
   wybrany_gracz = st.session_state["zalogowany_gracz"]
