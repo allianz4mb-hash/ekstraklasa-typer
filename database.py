@@ -37,6 +37,34 @@ def weryfikuj_pin_gracza(nick: str, wpisany_pin: str) -> bool:
     return False
 
 
+def zarejestruj_gracza(nick: str, pin: str):
+  """Rejestruje nowego gracza w bazie danych Supabase."""
+  nick_clean = str(nick).strip()
+  pin_clean = str(pin).strip()
+
+  if not nick_clean or not pin_clean:
+    return False, "Nick i PIN nie mogą być puste!"
+
+  try:
+    # Check if nick already exists
+    res = (
+        supabase.table("gracze")
+        .select("nick")
+        .eq("nick", nick_clean)
+        .execute()
+    )
+    if res.data:
+      return False, "Gracz o takim nicku już istnieje!"
+
+    # Insert new player
+    supabase.table("gracze").insert(
+        {"nick": nick_clean, "pin": pin_clean}
+    ).execute()
+    return True, "Konto zostało pomyślnie utworzone!"
+  except Exception as e:
+    return False, f"Błąd tworzenia konta: {e}"
+
+
 def synchronizuj_mecze_wsadowo(mecze_z_api):
   if not mecze_z_api:
     return False
