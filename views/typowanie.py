@@ -89,9 +89,15 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
       m for m in wszystkie_mecze if m.get("kolejka") == wybrana_kolejka_raw
   ]
 
-  dotychczasowe_typy = (
+  # POBIERAMY TYPY TYLKO DLA ZALOGOWANEGO GRACZA
+  raw_typy = (
       database.pobierz_typy_gracza(zalogowany_gracz) if zalogowany_gracz else {}
   )
+
+  # BEZPIECZNIK: odfiltrowujemy słownik, aby mieć pewność, że to typy tego gracza
+  dotychczasowe_typy = {}
+  if isinstance(raw_typy, dict):
+    dotychczasowe_typy = raw_typy
 
   pogrupowane_mecze = {}
   for mecz in mecze_kolejki:
@@ -100,7 +106,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
       pogrupowane_mecze[naglowek] = []
     pogrupowane_mecze[naglowek].append(mecz)
 
-  nowe_typy = []
+  nowy_typy = []
 
   with st.form(key=f"form_typy_{wybrana_kolejka_raw}"):
     for naglowek_dnia, mecze in pogrupowane_mecze.items():
@@ -116,8 +122,8 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
         data_meczu = mecz.get("data_meczu", "")
         godzina_str = formatuj_godzine(data_meczu)
 
-        czy_obstawiono = mecz_id in dotychczasowe_typy
-        if czy_obstawiono:
+        # SPRAWDZAMY CZY TEN KONKRETNY GRACZ OBSTAWIŁ TEN MECZ
+        if zalogowany_gracz and mecz_id in dotychczasowe_typy:
           domyslne_h, domyslne_a = dotychczasowe_typy[mecz_id]
           badge_html = f"<div style='text-align: right; color: #2e7d32; font-weight: bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a}</div>"
         else:
@@ -169,7 +175,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
           )
 
         if zalogowany_gracz:
-          nowe_typy.append({
+          nowy_typy.append({
               "gracz_nick": zalogowany_gracz,
               "mecz_id": mecz_id,
               "typ_gospodarze": typ_h,
@@ -186,7 +192,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
       if not zalogowany_gracz:
         st.error("Musisz być zalogowany, aby zapisać typy!")
       else:
-        sukces = database.zapisz_typy_gracza(nowe_typy)
+        sukces = database.zapisz_typy_gracza(nowy_typy)
         if sukces:
           st.success("✅ Twoje typy zostały pomyślnie zapisane w bazie!")
           st.rerun()
