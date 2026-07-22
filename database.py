@@ -25,7 +25,6 @@ def pobierz_liste_graczy():
 
 
 def weryfikuj_pin_gracza(nick: str, wpisany_pin: str) -> bool:
-  """Sprawdza, czy podany PIN zgadza się z przypisanym do gracza w bazie."""
   try:
     res = supabase.table("gracze").select("pin").eq("nick", nick).execute()
     if res.data:
@@ -38,7 +37,6 @@ def weryfikuj_pin_gracza(nick: str, wpisany_pin: str) -> bool:
 
 
 def zarejestruj_gracza(nick: str, pin: str):
-  """Rejestruje nowego gracza w bazie danych Supabase."""
   nick_clean = str(nick).strip()
   pin_clean = str(pin).strip()
 
@@ -46,7 +44,6 @@ def zarejestruj_gracza(nick: str, pin: str):
     return False, "Nick i PIN nie mogą być puste!"
 
   try:
-    # Check if nick already exists
     res = (
         supabase.table("gracze")
         .select("nick")
@@ -56,7 +53,6 @@ def zarejestruj_gracza(nick: str, pin: str):
     if res.data:
       return False, "Gracz o takim nicku już istnieje!"
 
-    # Insert new player
     supabase.table("gracze").insert(
         {"nick": nick_clean, "pin": pin_clean}
     ).execute()
@@ -101,6 +97,17 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
       status = state_info.get("description", "Not started")
       score = state_info.get("score", {}).get("current") or "- : -"
 
+      # Odczytujemy dokładną liczbę goli z wyniku API jeśli mecz minął/trwa
+      gole_h = 0
+      gole_a = 0
+      if score and ":" in str(score) and str(score) != "- : -":
+        try:
+          parts = str(score).split(":")
+          gole_h = int(parts[0].strip())
+          gole_a = int(parts[1].strip())
+        except ValueError:
+          pass
+
       paczka_danych.append({
           "id": match_id,
           "kolejka": round_name,
@@ -110,8 +117,8 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
           "logo_gospodarze": home_logo,
           "logo_goscie": away_logo,
           "status": status,
-          "gole_gospodarze": 0,
-          "gole_goscie": 0,
+          "gole_gospodarze": gole_h,
+          "gole_goscie": gole_a,
           "wynik": score,
       })
 
@@ -138,6 +145,16 @@ def pobierz_typy_gracza(gracz_nick: str):
   except Exception as e:
     st.error(f"Błąd pobierania typów: {e}")
     return {}
+
+
+def pobierz_wszystkie_typy():
+  """Pobiera wszystkie typy wszystkich graczy na potrzeby tabeli rankingowej."""
+  try:
+    res = supabase.table("typy").select("*").execute()
+    return res.data
+  except Exception as e:
+    st.error(f"Błąd pobierania typów: {e}")
+    return []
 
 
 def zapisz_typy_gracza(paczka_typow):
