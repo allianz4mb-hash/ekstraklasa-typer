@@ -9,6 +9,10 @@ st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide
 
 db = database.init_supabase()
 
+# --- ZARZĄDZANIE SESJĄ LOGOWANIA ---
+if "zalogowany_gracz" not in st.session_state:
+  st.session_state["zalogowany_gracz"] = None
+
 
 def formatuj_date(data_str):
   if not data_str:
@@ -27,27 +31,42 @@ def formatuj_date(data_str):
 
 st.title("⚽ Ekstraklasa Typer 2026/2027")
 
-# --- PANEL BOCZNY ---
+# --- PANEL BOCZNY: LOGOWANIE I PANEL GRACZA ---
 st.sidebar.header("👤 Panel Gracza")
 
-try:
-  res_gracze = db.table("gracze").select("nick").execute()
-  dostepni_gracze = [g["nick"] for g in res_gracze.data]
-except Exception:
-  dostepni_gracze = []
+dostepni_gracze = database.pobierz_liste_graczy()
 
-wybrany_gracz = st.sidebar.selectbox("Wybierz swój profil:", dostepni_gracze)
+if not st.session_state["zalogowany_gracz"]:
+  st.sidebar.subheader("🔒 Logowanie")
+  wybrany_gracz_do_logowania = st.sidebar.selectbox(
+      "Wybierz gracz:", dostepni_gracze
+  )
+  wpisany_pin = st.sidebar.text_input(
+      "Wpisz PIN:", type="password", key="input_pin"
+  )
 
-if wybrany_gracz:
-  st.sidebar.success(f"Zalogowany jako: **{wybrany_gracz}**")
+  if st.sidebar.button("🔑 Zaloguj się", use_container_width=True):
+    if database.weryfikuj_pin_gracza(wybrany_gracz_do_logowania, wpisany_pin):
+      st.session_state["zalogowany_gracz"] = wybrany_gracz_do_logowania
+      st.sidebar.success("Zalogowano pomyślnie!")
+      st.rerun()
+    else:
+      st.sidebar.error("❌ Nieprawidłowy PIN!")
 else:
-  st.sidebar.warning("Brak graczy w bazie. Dodaj kogoś w tabeli 'gracze'!")
+  wybrany_gracz = st.session_state["zalogowany_gracz"]
+  st.sidebar.success(f"Zalogowany jako: **{wybrany_gracz}**")
+
+  if st.sidebar.button("🚪 Wyloguj się", use_container_width=True):
+    st.session_state["zalogowany_gracz"] = None
+    st.rerun()
+
+wybrany_gracz = st.session_state["zalogowany_gracz"]
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Zarządzanie ligą")
 
 if st.sidebar.button("🔄 Synchronizuj terminarz z API"):
-  with st.spinner("Pobieranie terminarza Ekstraklasy wraz z herbami..."):
+  with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
 
     if liga_info:
@@ -110,7 +129,7 @@ else:
   )
 
   if not wybrany_gracz:
-    st.warning("⚠️ Wybierz swój profil w panelu bocznym, aby móc typować mecze!")
+    st.warning("🔒 Zaloguj się w panelu bocznym po lewej stronie, aby typować!")
 
   with st.form("formularz_typowania"):
     nowe_typy = {}
@@ -121,7 +140,6 @@ else:
 
       data_f = formatuj_date(mecz.get("data_meczu"))
 
-      # Pasek informacyjny meczu
       col_header1, col_header2 = st.columns([2, 2])
       with col_header1:
         st.caption(f"⏱️ {data_f}")
@@ -139,7 +157,6 @@ else:
               unsafe_allow_html=True,
           )
 
-      # Wiersz z zespołami i polami wpisywania
       col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 3])
 
       logo_h = mecz.get("logo_gospodarze")
@@ -200,12 +217,13 @@ else:
 
       st.markdown("---")
 
-      nowe_typy[mecz_id] = {
-          "gracz_nick": wybrany_gracz,
-          "mecz_id": mecz_id,
-          "typ_gospodarze": typ_gosp,
-          "typ_goscie": typ_gosc,
-      }
+      if wybrany_gracz:
+        nowe_typy[mecz_id] = {
+            "gracz_nick": wybrany_gracz,
+            "mecz_id": mecz_id,
+            "typ_gospodarze": typ_gosp,
+            "typ_goscie": typ_gosc,
+        }
 
     zapisz_button = st.form_submit_button(
         "💾 Zapisz moje typy na tę kolejkę",
@@ -214,7 +232,7 @@ else:
         disabled=not wybrany_gracz,
     )
 
-    if zapisz_button:
+    if zapisz_button and wybrany_gracz:
       paczka_do_zapisu = list(nowe_typy.values())
       sukces = database.zapisz_typy_gracza(paczka_do_zapisu)
       if sukces:
