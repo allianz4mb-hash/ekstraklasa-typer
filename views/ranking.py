@@ -1,3 +1,5 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import database
 import pandas as pd
 import streamlit as st
@@ -5,15 +7,60 @@ import streamlit as st
 
 def wyciągnij_numer_kolejki(kolejka_raw):
   if not kolejka_raw:
-    return "1"
+    return 1
   if "-" in str(kolejka_raw):
     parts = str(kolejka_raw).split("-")
     nr = parts[-1].strip()
     if nr.isdigit():
-      return nr
+      return int(nr)
   if str(kolejka_raw).isdigit():
-    return str(kolejka_raw)
-  return "1"
+    return int(kolejka_raw)
+  return 1
+
+
+def wyznacz_aktualna_kolejke(wszystkie_mecze):
+  """Dynamicznie wyznacza numer kolejki na podstawie aktualnej daty w Polsce."""
+  if not wszystkie_mecze:
+    return "1"
+
+  teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
+
+  # Grupujemy mecze według numeru kolejki
+  kolejki_dict = {}
+  for m in wszystkie_mecze:
+    nr = wyciągnij_numer_kolejki(m.get("kolejka"))
+    data_str = m.get("data_meczu", "")
+
+    if data_str:
+      try:
+        if data_str.endswith("Z"):
+          data_str = data_str[:-1] + "+00:00"
+        dt = datetime.fromisoformat(data_str).astimezone(
+            ZoneInfo("Europe/Warsaw")
+        )
+      except Exception:
+        dt = None
+    else:
+      dt = None
+
+    if nr not in kolejki_dict:
+      kolejki_dict[nr] = []
+    if dt:
+      kolejki_dict[nr].append(dt)
+
+  posortowane_nry = sorted(kolejki_dict.keys())
+
+  # Szukamy pierwszej kolejki, która ma jeszcze nie zakończone/przyszłe mecze
+  for nr in posortowane_nry:
+    daty = kolejki_dict[nr]
+    if daty:
+      max_data = max(daty)  # data ostatniego meczu w danej kolejce
+      # Jeśli ostatni mecz w kolejce minął dawniej niż 3 godziny temu, sprawdzamy następną
+      if teraz < max_data:
+        return str(nr)
+
+  # Jeśli wszystkie kolejki z bazy minęły, zwracamy ostatnią
+  return str(posortowane_nry[-1]) if posortowane_nry else "1"
 
 
 def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
@@ -54,13 +101,8 @@ def render_ranking(wszystkie_mecze):
 
   mapa_meczow = {m["id"]: m for m in wszystkie_mecze}
 
-  # Numer kolejki
-  kolejki_raw = sorted(
-      list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
-  )
-  aktualna_kolejka_nr = (
-      wyciągnij_numer_kolejki(kolejki_raw[0]) if kolejki_raw else "1"
-  )
+  # Dynamiczne wyznaczenie numeru kolejki na żywo
+  aktualna_kolejka_nr = wyznacz_aktualna_kolejke(wszystkie_mecze)
 
   statystyki = {
       g: {
