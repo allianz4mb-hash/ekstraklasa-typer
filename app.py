@@ -4,6 +4,7 @@ import streamlit as st
 from views.matryca import render_matryca
 from views.profil import render_profil
 from views.ranking import render_ranking
+from views.regulamin import render_regulamin
 from views.typowanie import render_typowanie
 
 st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide")
@@ -143,11 +144,12 @@ czas_synchro = database.pobierz_czas_synchro()
 st.sidebar.caption(f"⏱️ **Ostatnia synchro:** {czas_synchro}")
 
 # --- WCHODZENIE W ZAKŁADKI ---
-tab_typowanie, tab_ranking, tab_matryca, tab_profil = st.tabs([
+tab_typowanie, tab_ranking, tab_matryca, tab_profil, tab_regulamin = st.tabs([
     "🎯 Formularz Typowania",
     "🏆 Tabela / Ranking",
     "👁️ Podgląd Typów",
     "⚙️ Profil",
+    "📜 Regulamin",
 ])
 
 try:
@@ -169,3 +171,6 @@ with tab_matryca:
 
 with tab_profil:
   render_profil(wybrany_gracz)
+
+with tab_regulamin:
+  render_regulamin()
