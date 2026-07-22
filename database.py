@@ -14,6 +14,29 @@ def init_supabase() -> Client:
 supabase = init_supabase()
 
 
+def pobierz_liste_graczy():
+  """Pobiera listę nazwisk/nicków wszystkich graczy."""
+  try:
+    res = supabase.table("gracze").select("nick").execute()
+    return [g["nick"] for g in res.data]
+  except Exception as e:
+    st.error(f"Błąd pobierania graczy: {e}")
+    return []
+
+
+def weryfikuj_pin_gracza(nick: str, wpisany_pin: str) -> bool:
+  """Sprawdza, czy podany PIN zgadza się z przypisanym do gracza w bazie."""
+  try:
+    res = supabase.table("gracze").select("pin").eq("nick", nick).execute()
+    if res.data:
+      db_pin = str(res.data[0].get("pin", "") or "").strip()
+      return db_pin == str(wpisany_pin).strip()
+    return False
+  except Exception as e:
+    st.error(f"Błąd weryfikacji PIN-u: {e}")
+    return False
+
+
 def synchronizuj_mecze_wsadowo(mecze_z_api):
   if not mecze_z_api:
     return False
@@ -31,7 +54,6 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
       home_team = home_info.get("name")
       away_team = away_info.get("name")
 
-      # Pobieramy URL logo z dowolnego możliwego klucza w API
       home_logo = (
           home_info.get("logo")
           or home_info.get("logoUrl")
