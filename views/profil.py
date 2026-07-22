@@ -2,7 +2,7 @@ import database
 import streamlit as st
 
 
-def render_profil(zalogowany_gracz):
+def render_profil(zalogowany_gracz, wszystkie_mecze=[]):
   st.header("⚙️ Ustawienia Profilu")
 
   if not zalogowany_gracz:
@@ -14,46 +14,63 @@ def render_profil(zalogowany_gracz):
 
   col1, col2 = st.columns(2)
 
-  # --- SEKCJA 1: ZMIANA NICKU / IMIENIA ---
+  # Mapa klubów i logo
+  kluby_mapa = database.pobierz_mapa_klubow_logo(wszystkie_mecze)
+  lista_klubow = ["— Brak —"] + sorted(list(kluby_mapa.keys()))
+
+  # Pobranie aktualnego klubu gracza
+  info_gracze = database.pobierz_informacje_o_graczach()
+  obecny_klub = info_gracze.get(zalogowany_gracz, {}).get(
+      "ulubiony_klub", "— Brak —"
+  )
+  if not obecny_klub:
+    obecny_klub = "— Brak —"
+
   with col1:
-    st.subheader("✏️ Zmień Nick / Imię")
-    with st.form("form_zmiana_nicku"):
-      nowy_nick = st.text_input(
-          "Nowy nick / imię:",
-          value=zalogowany_gracz,
-          placeholder="Wpisz nowy nick",
+    st.subheader("✏️ Zmień Nick oraz Ulubiony Klub")
+    with st.form("form_zmiana_profilu"):
+      nowy_nick = st.text_input("Nick / Imię:", value=zalogowany_gracz)
+
+      idx_klub = (
+          lista_klubow.index(obecny_klub)
+          if obecny_klub in lista_klubow
+          else 0
       )
-      btn_zmien_nick = st.form_submit_button(
-          "💾 Zapisz nowy nick", use_container_width=True, type="primary"
+      nowy_klub = st.selectbox(
+          "Ulubiony Klub Ekstraklasy:", lista_klubow, index=idx_klub
       )
 
-      if btn_zmien_nick:
+      btn_zapisz = st.form_submit_button(
+          "💾 Zapisz zmiany", use_container_width=True, type="primary"
+      )
+
+      if btn_zapisz:
         nowy_nick_clean = nowy_nick.strip()
-        if nowy_nick_clean == zalogowany_gracz:
-          st.info("Nowy nick jest taki sam jak obecny.")
-        elif not nowy_nick_clean:
-          st.error("Nick nie może być pusty!")
-        else:
+        klub_val = "" if nowy_klub == "— Brak —" else nowy_klub
+
+        # Zmiana klubu
+        database.zmien_ulubiony_klub(zalogowany_gracz, klub_val)
+
+        # Zmiana nicku
+        if nowy_nick_clean != zalogowany_gracz and nowy_nick_clean:
           sukces, msg = database.zmien_nick_gracza(
               zalogowany_gracz, nowy_nick_clean
           )
           if sukces:
-            # Aktualizujemy nazwę w aktywnej sesji
             st.session_state["zalogowany_gracz"] = nowy_nick_clean
-            st.success("✅ Nick został zmieniony!")
+            st.success("✅ Zaktualizowano profil!")
             st.rerun()
           else:
             st.error(msg)
+        else:
+          st.success("✅ Zaktualizowano klub!")
+          st.rerun()
 
-  # --- SEKCJA 2: ZMIANA PIN-U ---
   with col2:
     st.subheader("🔑 Zmień 4-cyfrowy PIN")
     with st.form("form_zmiana_pinu"):
       stary_pin = st.text_input(
-          "Obecny PIN:",
-          type="password",
-          max_chars=4,
-          key="prof_stary_pin",
+          "Obecny PIN:", type="password", max_chars=4, key="prof_stary_pin"
       )
       nowy_pin = st.text_input(
           "Nowy 4-cyfrowy PIN:",
