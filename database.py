@@ -1,5 +1,8 @@
+from datetime import datetime
+import hashlib
 import os
 import re
+from zoneinfo import ZoneInfo
 import streamlit as st
 from supabase import Client, create_client
 
@@ -15,8 +18,12 @@ def init_supabase() -> Client:
 supabase = init_supabase()
 
 
+def hash_pin(pin: str) -> str:
+  """Szyfruje PIN za pomocą algorytmu SHA-256."""
+  return hashlib.sha256(str(pin).strip().encode("utf-8")).hexdigest()
+
+
 def pobierz_liste_graczy():
-  """Pobiera listę nazwisk/nicków wszystkich graczy."""
   try:
     res = supabase.table("gracze").select("nick").execute()
     return [g["nick"] for g in res.data]
@@ -30,7 +37,9 @@ def weryfikuj_pin_gracza(nick: str, wpisany_pin: str) -> bool:
     res = supabase.table("gracze").select("pin").eq("nick", nick).execute()
     if res.data:
       db_pin = str(res.data[0].get("pin", "") or "").strip()
-      return db_pin == str(wpisany_pin).strip()
+      wpisany_hashed = hash_pin(wpisany_pin)
+      # Sprawdzamy szyfrowany PIN lub bezpośrednio (kompatybilność wsteczna dla starych wpisów)
+      return db_pin == wpisany_hashed or db_pin == str(wpisany_pin).strip()
     return False
   except Exception as e:
     st.error(f"Błąd weryfikacji PIN-u: {e}")
@@ -44,7 +53,6 @@ def zarejestruj_gracza(nick: str, pin: str):
   if not nick_clean or not pin_clean:
     return False, "Nick i PIN nie mogą być puste!"
 
-  # Wymóg: dokładnie 4 cyfry
   if not re.match(r"^\d{4}$", pin_clean):
     return False, "PIN musi składać się z dokładnie 4 cyfr (np. 1234)!"
 
@@ -58,12 +66,49 @@ def zarejestruj_gracza(nick: str, pin: str):
     if res.data:
       return False, "Gracz o takim nicku już istnieje!"
 
+    hashed = hash_pin(pin_clean)
     supabase.table("gracze").insert(
-        {"nick": nick_clean, "pin": pin_clean}
+        {"nick": nick_clean, "pin": hashed}
     ).execute()
     return True, "Konto zostało pomyślnie utworzone!"
   except Exception as e:
     return False, f"Błąd tworzenia konta: {e}"
+
+
+def zmien_pin_gracza(nick: str, nowy_pin: str):
+  try:
+    hashed = hash_pin(nowy_pin)
+    supabase.table("gracze").update({"pin": hashed}).eq("nick", nick).execute()
+    return True, "🔑 PIN został pomyślnie zmieniony!"
+  except Exception as e:
+    return False, f"Błąd zmiany PIN-u: {e}"
+
+
+def zapisz_czas_synchro():
+  teraz = datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%Y-%m-%d %H:%M:%S")
+  try:
+    supabase.table("ustawienia").upsert(
+        {"klucz": "ostatnia_synchro", "wartosc": teraz}
+    ).execute()
+  except Exception:
+    pass
+
+
+def pobierz_czas_synchro():
+  try:
+    res = (
+        supabase.table("ustawienia")
+        .select("wartosc")
+        .eq("klucz", "ostatnia_synchro")
+        .execute()
+    )
+    if res.data and res.data[0].get("wartosc"):
+      dt_str = res.data[0].get("wartosc")
+      dt = datetime.fromisoformat(dt_str)
+      return dt.strftime("%d.%m.%Y, godz. %H:%M")
+    return "Brak danych"
+  except Exception:
+    return "Brak danych"
 
 
 def synchronizuj_mecze_wsadowo(mecze_z_api):
@@ -127,6 +172,7 @@ def synchronizuj_mecze_wsadowo(mecze_z_api):
       })
 
     supabase.table("mecze").upsert(paczka_danych, on_conflict="id").execute()
+    zapisz_czas_synchro()
     return True
 
   except Exception as e:
