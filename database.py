@@ -113,44 +113,42 @@ def zapisz_typy_gracza(lista_typow):
 
 
 def synchronizuj_mecze_wsadowo(surowe_mecze):
-  try:
-    if not surowe_mecze:
-      return False
+  if not surowe_mecze:
+    return False
 
-    rekordy = []
-    for m in surowe_mecze:
-      fixture = m.get("fixture", {})
-      if not fixture or "id" not in fixture:
-        continue
+  rekordy = []
+  for m in surowe_mecze:
+    fixture = m.get("fixture", {})
+    if not fixture or "id" not in fixture:
+      continue
 
-      league = m.get("league", {})
-      teams = m.get("teams", {})
-      goals = m.get("goals", {})
+    league = m.get("league", {})
+    teams = m.get("teams", {})
+    goals = m.get("goals", {})
 
-      home_team = teams.get("home", {})
-      away_team = teams.get("away", {})
-      status_fixture = fixture.get("status", {})
+    home_team = teams.get("home", {})
+    away_team = teams.get("away", {})
+    status_fixture = fixture.get("status", {})
 
-      gole_h = goals.get("home")
-      gole_a = goals.get("away")
+    gole_h = goals.get("home")
+    gole_a = goals.get("away")
 
-      rekordy.append({
-          "id": fixture.get("id"),
-          "kolejka": league.get("round", "Kolejka 1"),
-          "data_meczu": fixture.get("date", ""),
-          "gospodarze": home_team.get("name", "Gospodarz"),
-          "goscie": away_team.get("name", "Gość"),
-          "logo_gospodarze": home_team.get("logo", ""),
-          "logo_goscie": away_team.get("logo", ""),
-          "gole_gospodarze": gole_h,
-          "gole_goscie": gole_a,
-          "status": status_fixture.get("short", "NS"),
-          "wynik": (
-              f"{gole_h} : {gole_a}" if gole_h is not None else "- : -"
-          ),
-      })
+    rekordy.append({
+        "id": fixture.get("id"),
+        "kolejka": league.get("round", "Kolejka 1"),
+        "data_meczu": fixture.get("date", ""),
+        "gospodarze": home_team.get("name", "Gospodarz"),
+        "goscie": away_team.get("name", "Gość"),
+        "logo_gospodarze": home_team.get("logo", ""),
+        "logo_goscie": away_team.get("logo", ""),
+        "gole_gospodarze": gole_h,
+        "gole_goscie": gole_a,
+        "status": status_fixture.get("short", "NS"),
+        "wynik": (f"{gole_h} : {gole_a}" if gole_h is not None else "- : -"),
+    })
 
-    if rekordy:
+  if rekordy:
+    try:
       db.table("mecze").upsert(rekordy, on_conflict="id").execute()
 
       teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
@@ -161,9 +159,11 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
           on_conflict="klucz",
       ).execute()
       return True
-    return False
-  except Exception:
-    return False
+    except Exception as e:
+      st.error(f"⚠️ SZCZEGÓŁY BŁĘDU BAZY: {str(e)}")
+      raise e
+
+  return False
 
 
 def pobierz_czas_synchro():
