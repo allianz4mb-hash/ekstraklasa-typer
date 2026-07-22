@@ -88,117 +88,93 @@ def render_ranking(wszystkie_mecze):
       by=["Punkty", "Dokładne", "Mecze"], ascending=[False, False, False]
   ).reset_index(drop=True)
 
-  # --- GENEROWANIE DEDYKOWANEJ TABELI TELEWIZYJNEJ (HTML/CSS) ---
   l_graczy = len(df)
 
-  css_style = """
-    <style>
-        .ekstraklasa-container {
-            font-family: 'Montserrat', 'Arial Black', sans-serif;
-            max-width: 900px;
-            margin: 0 auto;
-            background-color: #0b0e14;
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .ekstraklasa-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0 5px;
-        }
-        .ekstraklasa-header {
-            color: #8f9bba;
-            font-size: 11px;
-            text-transform: uppercase;
-            font-weight: 800;
-            letter-spacing: 1px;
-            padding: 8px 12px;
-        }
-        .ekstraklasa-row {
-            height: 48px;
-            font-size: 15px;
-            font-weight: 800;
-            text-transform: uppercase;
-            transition: transform 0.2s;
-        }
-        
-        /* Kolorystyka pozycji prosto z grafiki TV Ekstraklasy */
-        .pos-lider {
-            background: linear-gradient(90deg, #00f2ff 0%, #15c5cf 100%);
-            color: #05131a;
-        }
-        .pos-podium {
-            background: linear-gradient(90deg, #bcbebe 0%, #a2a4a4 100%);
-            color: #111;
-        }
-        .pos-srodek {
-            background: #1b2028;
-            color: #ffffff;
-        }
-        .pos-spadek {
-            background: linear-gradient(90deg, #d32f2f 0%, #9a0007 100%);
-            color: #ffffff;
-        }
+  css_style = """<style>
+.ekstraklasa-container {
+    font-family: 'Montserrat', 'Arial Black', sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    background-color: #0b0e14;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.ekstraklasa-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+}
+.ekstraklasa-header {
+    color: #8f9bba;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 8px 12px;
+}
+.ekstraklasa-row {
+    height: 48px;
+    font-size: 15px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.pos-lider {
+    background: linear-gradient(90deg, #00f2ff 0%, #15c5cf 100%);
+    color: #05131a;
+}
+.pos-podium {
+    background: linear-gradient(90deg, #bcbebe 0%, #a2a4a4 100%);
+    color: #111;
+}
+.pos-srodek {
+    background: #1b2028;
+    color: #ffffff;
+}
+.pos-spadek {
+    background: linear-gradient(90deg, #d32f2f 0%, #9a0007 100%);
+    color: #ffffff;
+}
+.cell-pos {
+    width: 45px;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 900;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+.cell-logo {
+    width: 45px;
+    text-align: center;
+}
+.cell-logo img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    vertical-align: middle;
+}
+.cell-nick {
+    text-align: left;
+    padding-left: 10px;
+    letter-spacing: 0.5px;
+}
+.cell-stat {
+    text-align: center;
+    width: 65px;
+    font-size: 13px;
+    opacity: 0.9;
+}
+.cell-pts {
+    text-align: center;
+    width: 75px;
+    font-size: 19px;
+    font-weight: 900;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+</style>"""
 
-        .cell-pos {
-            width: 45px;
-            text-align: center;
-            font-size: 17px;
-            font-weight: 900;
-            border-top-left-radius: 6px;
-            border-bottom-left-radius: 6px;
-        }
-        .cell-logo {
-            width: 45px;
-            text-align: center;
-        }
-        .cell-logo img {
-            width: 28px;
-            height: 28px;
-            object-fit: contain;
-            vertical-align: middle;
-        }
-        .cell-nick {
-            text-align: left;
-            padding-left: 10px;
-            letter-spacing: 0.5px;
-        }
-        .cell-stat {
-            text-align: center;
-            width: 65px;
-            font-size: 13px;
-            opacity: 0.9;
-        }
-        .cell-pts {
-            text-align: center;
-            width: 75px;
-            font-size: 19px;
-            font-weight: 900;
-            border-top-right-radius: 6px;
-            border-bottom-right-radius: 6px;
-        }
-    </style>
-    """
-
-  html_table = f"""
-    {css_style}
-    <div class="ekstraklasa-container">
-        <table class="ekstraklasa-table">
-            <thead>
-                <tr>
-                    <th class="ekstraklasa-header" style="text-align:center;">#</th>
-                    <th class="ekstraklasa-header" style="text-align:center;">KLUB</th>
-                    <th class="ekstraklasa-header" style="text-align:left; padding-left:10px;">GRACZ</th>
-                    <th class="ekstraklasa-header" style="text-align:center;">MECZE</th>
-                    <th class="ekstraklasa-header" style="text-align:center;">3PKT</th>
-                    <th class="ekstraklasa-header" style="text-align:center;">1PKT</th>
-                    <th class="ekstraklasa-header" style="text-align:center;">PUNKTY</th>
-                </tr>
-            </thead>
-            <tbody>
-    """
-
+  html_rows = []
   for idx, row in df.iterrows():
     miejsce = idx + 1
     nick = row["Gracz"]
@@ -208,41 +184,26 @@ def render_ranking(wszystkie_mecze):
     traf = row["Trafione"]
     mcz = row["Mecze"]
 
-    # Dobór logo ulubionego klubu
     logo_url = kluby_mapa.get(klub, "")
-    logo_img = (
-        f'<img src="{logo_url}" title="{klub}">'
-        if logo_url
-        else '<span style="opacity:0.3;">⚽</span>'
-    )
+    if logo_url:
+      logo_img = f'<img src="{logo_url}" title="{klub}">'
+    else:
+      logo_img = '<span style="opacity:0.3;">⚽</span>'
 
-    # Styl na podstawie miejsca
     if miejsce == 1:
       klasa_pos = "pos-lider"
     elif miejsce in [2, 3]:
       klasa_pos = "pos-podium"
     elif l_graczy >= 4 and miejsce > (l_graczy - 2):
-      # Ostatnie 2 miejsca (lub strefa spadkowa) na czerwono
       klasa_pos = "pos-spadek"
     else:
       klasa_pos = "pos-srodek"
 
-    html_table += f"""
-            <tr class="ekstraklasa-row {klasa_pos}">
-                <td class="cell-pos">{miejsce}</td>
-                <td class="cell-logo">{logo_img}</td>
-                <td class="cell-nick">{nick}</td>
-                <td class="cell-stat">{mcz}</td>
-                <td class="cell-stat">{dok}</td>
-                <td class="cell-stat">{traf}</td>
-                <td class="cell-pts">{pts}</td>
-            </tr>
-        """
+    row_html = f'<tr class="ekstraklasa-row {klasa_pos}"><td class="cell-pos">{miejsce}</td><td class="cell-logo">{logo_img}</td><td class="cell-nick">{nick}</td><td class="cell-stat">{mcz}</td><td class="cell-stat">{dok}</td><td class="cell-stat">{traf}</td><td class="cell-pts">{pts}</td></tr>'
+    html_rows.append(row_html)
 
-  html_table += """
-            </tbody>
-        </table>
-    </div>
-    """
+  rows_combined = "".join(html_rows)
 
-  st.markdown(html_table, unsafe_allow_html=True)
+  full_html = f'{css_style}<div class="ekstraklasa-container"><table class="ekstraklasa-table"><thead><tr><th class="ekstraklasa-header" style="text-align:center;">#</th><th class="ekstraklasa-header" style="text-align:center;">KLUB</th><th class="ekstraklasa-header" style="text-align:left; padding-left:10px;">GRACZ</th><th class="ekstraklasa-header" style="text-align:center;">MECZE</th><th class="ekstraklasa-header" style="text-align:center;">3PKT</th><th class="ekstraklasa-header" style="text-align:center;">1PKT</th><th class="ekstraklasa-header" style="text-align:center;">PUNKTY</th></tr></thead><tbody>{rows_combined}</tbody></table></div>'
+
+  st.markdown(full_html, unsafe_allow_html=True)
