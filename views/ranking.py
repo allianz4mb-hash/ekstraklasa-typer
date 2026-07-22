@@ -3,11 +3,7 @@ import pandas as pd
 import streamlit as st
 
 
-def oblicz_punkty_za_mecz(
-    typ_h, typ_a, wynik_h, wynik_a, status_meczu
-) -> tuple[int, bool]:
-  """Zwraca (liczba_punktów, czy_dokładny_wynik)."""
-  # Jeśli mecz nie ma rozstrzygniętego wyniku, nie przyznajemy punktów
+def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
   if wynik_h is None or wynik_a is None:
     return 0, False
 
@@ -17,11 +13,9 @@ def oblicz_punkty_za_mecz(
   except (ValueError, TypeError):
     return 0, False
 
-  # 1. Dokładny wynik (3 pkt)
   if typ_h == wynik_h and typ_a == wynik_a:
     return 3, True
 
-  # 2. Poprawne rozstrzygnięcie - 1X2 (1 pkt)
   roznica_typ = typ_h - typ_a
   roznica_wynik = wynik_h - wynik_a
 
@@ -40,27 +34,27 @@ def render_ranking(wszystkie_mecze):
 
   gracze = database.pobierz_liste_graczy()
   wszystkie_typy = database.pobierz_wszystkie_typy()
+  info_gracze = database.pobierz_informacje_o_graczach()
+  kluby_mapa = database.pobierz_mapa_klubow_logo(wszystkie_mecze)
 
   if not gracze:
     st.info("Brak zarejestrowanych graczy w bazie.")
     return
 
-  # Mapa meczów dla szybkiego dostępu do wyników
   mapa_meczow = {m["id"]: m for m in wszystkie_mecze}
 
-  # Inicjalizacja statystyk dla każdego gracza
   statystyki = {
       g: {
           "Gracz": g,
           "Punkty": 0,
-          "Dokładne wyniki (3pkt)": 0,
-          "Trafione 1X2 (1pkt)": 0,
-          "Frekwencja (Liczba typów)": 0,
+          "Dokładne": 0,
+          "Trafione": 0,
+          "Mecze": 0,
+          "Klub": info_gracze.get(g, {}).get("ulubiony_klub", ""),
       }
       for g in gracze
   }
 
-  # Zliczanie punktów
   for t in wszystkie_typy:
     nick = t.get("gracz_nick")
     mecz_id = t.get("mecz_id")
@@ -68,13 +62,10 @@ def render_ranking(wszystkie_mecze):
     if nick in statystyki and mecz_id in mapa_meczow:
       mecz = mapa_meczow[mecz_id]
       status = mecz.get("status", "")
-
-      # Uwzględniamy tylko mecze zakończone lub mające wpisany wynik
       gole_h = mecz.get("gole_gospodarze")
       gole_a = mecz.get("gole_goscie")
       wynik_str = mecz.get("wynik", "")
 
-      # Jeśli wynik jest dostępny
       if wynik_str and wynik_str != "- : -":
         pts, dokladny = oblicz_punkty_za_mecz(
             t.get("typ_gospodarze"),
@@ -85,45 +76,173 @@ def render_ranking(wszystkie_mecze):
         )
 
         statystyki[nick]["Punkty"] += pts
-        statystyki[nick]["Frekwencja (Liczba typów)"] += 1
+        statystyki[nick]["Mecze"] += 1
 
         if pts == 3:
-          statystyki[nick]["Dokładne wyniki (3pkt)"] += 1
+          statystyki[nick]["Dokładne"] += 1
         elif pts == 1:
-          statystyki[nick]["Trafione 1X2 (1pkt)"] += 1
+          statystyki[nick]["Trafione"] += 1
 
-  # Konwersja do DataFrame
   df = pd.DataFrame(list(statystyki.values()))
-
-  # AUTOMATYCZNE SORTOWANIE ZGODNIE Z REGULAMINEM:
-  # 1. Punkty (malejąco)
-  # 2. Dokładne wyniki (malejąco)
-  # 3. Frekwencja (malejąco)
   df = df.sort_values(
-      by=["Punkty", "Dokładne wyniki (3pkt)", "Frekwencja (Liczba typów)"],
-      ascending=[False, False, False],
+      by=["Punkty", "Dokładne", "Mecze"], ascending=[False, False, False]
   ).reset_index(drop=True)
 
-  # Dodanie kolumny z miejscem
-  df.index = df.index + 1
-  df.index.name = "Miejsce"
+  # --- GENEROWANIE DEDYKOWANEJ TABELI TELEWIZYJNEJ (HTML/CSS) ---
+  l_graczy = len(df)
 
-  # Wyświetlenie tabeli
-  st.dataframe(
-      df,
-      use_container_width=True,
-      column_config={
-          "Punkty": st.column_config.NumberColumn(
-              "🏆 Punkty", help="Łączna liczba punktów"
-          ),
-          "Dokładne wyniki (3pkt)": st.column_config.NumberColumn(
-              "🎯 Dokładne (3pkt)"
-          ),
-          "Trafione 1X2 (1pkt)": st.column_config.NumberColumn(
-              "👍 Trafione (1pkt)"
-          ),
-          "Frekwencja (Liczba typów)": st.column_config.NumberColumn(
-              "📊 Oddane typy"
-          ),
-      },
-  )
+  css_style = """
+    <style>
+        .ekstraklasa-container {
+            font-family: 'Montserrat', 'Arial Black', sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #0b0e14;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .ekstraklasa-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 5px;
+        }
+        .ekstraklasa-header {
+            color: #8f9bba;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: 1px;
+            padding: 8px 12px;
+        }
+        .ekstraklasa-row {
+            height: 48px;
+            font-size: 15px;
+            font-weight: 800;
+            text-transform: uppercase;
+            transition: transform 0.2s;
+        }
+        
+        /* Kolorystyka pozycji prosto z grafiki TV Ekstraklasy */
+        .pos-lider {
+            background: linear-gradient(90deg, #00f2ff 0%, #15c5cf 100%);
+            color: #05131a;
+        }
+        .pos-podium {
+            background: linear-gradient(90deg, #bcbebe 0%, #a2a4a4 100%);
+            color: #111;
+        }
+        .pos-srodek {
+            background: #1b2028;
+            color: #ffffff;
+        }
+        .pos-spadek {
+            background: linear-gradient(90deg, #d32f2f 0%, #9a0007 100%);
+            color: #ffffff;
+        }
+
+        .cell-pos {
+            width: 45px;
+            text-align: center;
+            font-size: 17px;
+            font-weight: 900;
+            border-top-left-radius: 6px;
+            border-bottom-left-radius: 6px;
+        }
+        .cell-logo {
+            width: 45px;
+            text-align: center;
+        }
+        .cell-logo img {
+            width: 28px;
+            height: 28px;
+            object-fit: contain;
+            vertical-align: middle;
+        }
+        .cell-nick {
+            text-align: left;
+            padding-left: 10px;
+            letter-spacing: 0.5px;
+        }
+        .cell-stat {
+            text-align: center;
+            width: 65px;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .cell-pts {
+            text-align: center;
+            width: 75px;
+            font-size: 19px;
+            font-weight: 900;
+            border-top-right-radius: 6px;
+            border-bottom-right-radius: 6px;
+        }
+    </style>
+    """
+
+  html_table = f"""
+    {css_style}
+    <div class="ekstraklasa-container">
+        <table class="ekstraklasa-table">
+            <thead>
+                <tr>
+                    <th class="ekstraklasa-header" style="text-align:center;">#</th>
+                    <th class="ekstraklasa-header" style="text-align:center;">KLUB</th>
+                    <th class="ekstraklasa-header" style="text-align:left; padding-left:10px;">GRACZ</th>
+                    <th class="ekstraklasa-header" style="text-align:center;">MECZE</th>
+                    <th class="ekstraklasa-header" style="text-align:center;">3PKT</th>
+                    <th class="ekstraklasa-header" style="text-align:center;">1PKT</th>
+                    <th class="ekstraklasa-header" style="text-align:center;">PUNKTY</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+
+  for idx, row in df.iterrows():
+    miejsce = idx + 1
+    nick = row["Gracz"]
+    klub = row["Klub"]
+    pts = row["Punkty"]
+    dok = row["Dokładne"]
+    traf = row["Trafione"]
+    mcz = row["Mecze"]
+
+    # Dobór logo ulubionego klubu
+    logo_url = kluby_mapa.get(klub, "")
+    logo_img = (
+        f'<img src="{logo_url}" title="{klub}">'
+        if logo_url
+        else '<span style="opacity:0.3;">⚽</span>'
+    )
+
+    # Styl na podstawie miejsca
+    if miejsce == 1:
+      klasa_pos = "pos-lider"
+    elif miejsce in [2, 3]:
+      klasa_pos = "pos-podium"
+    elif l_graczy >= 4 and miejsce > (l_graczy - 2):
+      # Ostatnie 2 miejsca (lub strefa spadkowa) na czerwono
+      klasa_pos = "pos-spadek"
+    else:
+      klasa_pos = "pos-srodek"
+
+    html_table += f"""
+            <tr class="ekstraklasa-row {klasa_pos}">
+                <td class="cell-pos">{miejsce}</td>
+                <td class="cell-logo">{logo_img}</td>
+                <td class="cell-nick">{nick}</td>
+                <td class="cell-stat">{mcz}</td>
+                <td class="cell-stat">{dok}</td>
+                <td class="cell-stat">{traf}</td>
+                <td class="cell-pts">{pts}</td>
+            </tr>
+        """
+
+  html_table += """
+            </tbody>
+        </table>
+    </div>
+    """
+
+  st.markdown(html_table, unsafe_allow_html=True)
