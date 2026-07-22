@@ -93,6 +93,8 @@ def zmien_pin_gracza(nick, nowy_pin):
 
 
 def pobierz_typy_gracza(nick):
+  if not nick:
+    return {}
   res = db.table("typy").select("*").eq("gracz_nick", nick).execute()
   return {
       row["mecz_id"]: (row["typ_gospodarze"], row["typ_goscie"])
@@ -133,7 +135,6 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     gole_h = goals.get("home")
     gole_a = goals.get("away")
 
-    # Bezpieczna konwersja na int lub None
     try:
       gole_h_int = int(gole_h) if gole_h is not None else None
     except (TypeError, ValueError):
