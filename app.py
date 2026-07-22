@@ -1,5 +1,7 @@
+import datetime
 import api
 import database
+import extra_streamlit_components as stx
 import streamlit as st
 from views.matryca import render_matryca
 from views.profil import render_profil
@@ -9,6 +11,15 @@ from views.typowanie import render_typowanie
 st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide")
 
 db = database.init_supabase()
+
+
+# --- INICJALIZACJA OBSŁUGI CIASTECZEK (TRWAŁA SESJA) ---
+@st.cache_resource
+def get_cookie_manager():
+  return stx.CookieManager()
+
+
+cookie_manager = get_cookie_manager()
 
 
 # --- AUTOMATYCZNA SYNCHRONIZACJA W TLE (MAX RAZ NA 30 MINUT) ---
@@ -27,12 +38,19 @@ def automatyczna_synchronizacja():
     pass
 
 
-# Wywołanie automatycznej synchronizacji przy wejściu użytkownika
 automatyczna_synchronizacja()
 
-# --- ZARZĄDZANIE SESJĄ LOGOWANIA ---
+# --- ZARZĄDZANIE SESJĄ I CIASTECZKAMI ---
 if "zalogowany_gracz" not in st.session_state:
   st.session_state["zalogowany_gracz"] = None
+
+# Próba odczytu zapisanego ciasteczka z przeglądarki
+saved_player = cookie_manager.get(cookie="typer_zalogowany_gracz")
+
+if not st.session_state["zalogowany_gracz"] and saved_player:
+  dostepni = database.pobierz_liste_graczy()
+  if saved_player in dostepni:
+    st.session_state["zalogowany_gracz"] = saved_player
 
 st.title("⚽ Ekstraklasa Typer 2026/2027")
 
@@ -61,6 +79,15 @@ if not st.session_state["zalogowany_gracz"]:
             wybrany_gracz_do_logowania, wpisany_pin
         ):
           st.session_state["zalogowany_gracz"] = wybrany_gracz_do_logowania
+
+          # Zapisujemy ciasteczko ważne przez 30 dni
+          expires = datetime.datetime.now() + datetime.timedelta(days=30)
+          cookie_manager.set(
+              "typer_zalogowany_gracz",
+              wybrany_gracz_do_logowania,
+              expires_at=expires,
+          )
+
           st.success("Zalogowano pomyślnie!")
           st.rerun()
         else:
@@ -96,6 +123,14 @@ if not st.session_state["zalogowany_gracz"]:
         if sukces:
           st.success(komunikat)
           st.session_state["zalogowany_gracz"] = nowy_nick.strip()
+
+          expires = datetime.datetime.now() + datetime.timedelta(days=30)
+          cookie_manager.set(
+              "typer_zalogowany_gracz",
+              nowy_nick.strip(),
+              expires_at=expires,
+          )
+
           st.rerun()
         else:
           st.error(komunikat)
@@ -106,6 +141,7 @@ else:
 
   if st.sidebar.button("🚪 Wyloguj się", use_container_width=True):
     st.session_state["zalogowany_gracz"] = None
+    cookie_manager.delete("typer_zalogowany_gracz")
     st.rerun()
 
 wybrany_gracz = st.session_state["zalogowany_gracz"]
@@ -114,7 +150,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Zarządzanie ligą")
 
 if st.sidebar.button("🔄 Wymuś synchronizację z API", use_container_width=True):
-  st.cache_data.clear()  # Czyszczenie pamięci podręcznej, aby wymusić pobranie
+  st.cache_data.clear()
   with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
 
