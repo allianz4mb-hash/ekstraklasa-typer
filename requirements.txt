@@ -1,6 +1,5 @@
 streamlit
 supabase
 requests
-beautifulsoup4
-bcrypt
-streamlit-cookies-controller
+pandas
+extra-streamlit-components
