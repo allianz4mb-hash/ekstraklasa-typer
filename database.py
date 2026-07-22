@@ -133,18 +133,35 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     gole_h = goals.get("home")
     gole_a = goals.get("away")
 
+    # Bezpieczna konwersja na int lub None
+    try:
+      gole_h_int = int(gole_h) if gole_h is not None else None
+    except (TypeError, ValueError):
+      gole_h_int = None
+
+    try:
+      gole_a_int = int(gole_a) if gole_a is not None else None
+    except (TypeError, ValueError):
+      gole_a_int = None
+
+    wynik_str = (
+        f"{gole_h_int} : {gole_a_int}"
+        if gole_h_int is not None and gole_a_int is not None
+        else "- : -"
+    )
+
     rekordy.append({
-        "id": fixture.get("id"),
-        "kolejka": league.get("round", "Kolejka 1"),
-        "data_meczu": fixture.get("date", ""),
-        "gospodarze": home_team.get("name", "Gospodarz"),
-        "goscie": away_team.get("name", "Gość"),
-        "logo_gospodarze": home_team.get("logo", ""),
-        "logo_goscie": away_team.get("logo", ""),
-        "gole_gospodarze": gole_h,
-        "gole_goscie": gole_a,
-        "status": status_fixture.get("short", "NS"),
-        "wynik": (f"{gole_h} : {gole_a}" if gole_h is not None else "- : -"),
+        "id": int(fixture.get("id")),
+        "kolejka": str(league.get("round", "Kolejka 1")),
+        "data_meczu": str(fixture.get("date", "")),
+        "gospodarze": str(home_team.get("name", "Gospodarz")),
+        "goscie": str(away_team.get("name", "Gość")),
+        "logo_gospodarze": str(home_team.get("logo", "")),
+        "logo_goscie": str(away_team.get("logo", "")),
+        "gole_gospodarze": gole_h_int,
+        "gole_goscie": gole_a_int,
+        "status": str(status_fixture.get("short", "NS")),
+        "wynik": wynik_str,
     })
 
   if rekordy:
@@ -161,7 +178,7 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
       return True
     except Exception as e:
       st.error(f"⚠️ SZCZEGÓŁY BŁĘDU BAZY: {str(e)}")
-      raise e
+      return False
 
   return False
 
