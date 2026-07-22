@@ -96,7 +96,7 @@ def render_ranking(wszystkie_mecze):
     max-width: 900px;
     margin: 0 auto;
     background-color: #0b0e14;
-    padding: 15px;
+    padding: 12px;
     border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
@@ -111,7 +111,7 @@ def render_ranking(wszystkie_mecze):
     text-transform: uppercase;
     font-weight: 800;
     letter-spacing: 1px;
-    padding: 8px 12px;
+    padding: 8px 6px;
 }
 .ekstraklasa-row {
     height: 48px;
@@ -136,39 +136,45 @@ def render_ranking(wszystkie_mecze):
     color: #ffffff;
 }
 .cell-pos {
-    width: 45px;
+    width: 35px;
     text-align: center;
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 900;
     border-top-left-radius: 6px;
     border-bottom-left-radius: 6px;
 }
 .cell-logo {
-    width: 45px;
+    width: 35px;
     text-align: center;
 }
 .cell-logo img {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     object-fit: contain;
     vertical-align: middle;
 }
 .cell-nick {
     text-align: left;
-    padding-left: 10px;
+    padding-left: 8px;
     letter-spacing: 0.5px;
-}
-.cell-stat {
-    text-align: center;
-    width: 65px;
-    font-size: 13px;
-    opacity: 0.9;
 }
 .cell-pts {
     text-align: center;
-    width: 75px;
-    font-size: 19px;
+    width: 65px;
+    font-size: 18px;
     font-weight: 900;
+}
+.cell-stat {
+    text-align: center;
+    width: 55px;
+    font-size: 13px;
+    opacity: 0.85;
+}
+.cell-stat-last {
+    text-align: center;
+    width: 55px;
+    font-size: 13px;
+    opacity: 0.85;
     border-top-right-radius: 6px;
     border-bottom-right-radius: 6px;
 }
@@ -199,11 +205,12 @@ def render_ranking(wszystkie_mecze):
     else:
       klasa_pos = "pos-srodek"
 
-    row_html = f'<tr class="ekstraklasa-row {klasa_pos}"><td class="cell-pos">{miejsce}</td><td class="cell-logo">{logo_img}</td><td class="cell-nick">{nick}</td><td class="cell-stat">{mcz}</td><td class="cell-stat">{dok}</td><td class="cell-stat">{traf}</td><td class="cell-pts">{pts}</td></tr>'
+    # Nowy układ: Punkty tuż po nicku!
+    row_html = f'<tr class="ekstraklasa-row {klasa_pos}"><td class="cell-pos">{miejsce}</td><td class="cell-logo">{logo_img}</td><td class="cell-nick">{nick}</td><td class="cell-pts">{pts}</td><td class="cell-stat">{dok}</td><td class="cell-stat">{traf}</td><td class="cell-stat-last">{mcz}</td></tr>'
     html_rows.append(row_html)
 
   rows_combined = "".join(html_rows)
 
-  full_html = f'{css_style}<div class="ekstraklasa-container"><table class="ekstraklasa-table"><thead><tr><th class="ekstraklasa-header" style="text-align:center;">#</th><th class="ekstraklasa-header" style="text-align:center;">KLUB</th><th class="ekstraklasa-header" style="text-align:left; padding-left:10px;">GRACZ</th><th class="ekstraklasa-header" style="text-align:center;">MECZE</th><th class="ekstraklasa-header" style="text-align:center;">3PKT</th><th class="ekstraklasa-header" style="text-align:center;">1PKT</th><th class="ekstraklasa-header" style="text-align:center;">PUNKTY</th></tr></thead><tbody>{rows_combined}</tbody></table></div>'
+  full_html = f'{css_style}<div class="ekstraklasa-container"><table class="ekstraklasa-table"><thead><tr><th class="ekstraklasa-header" style="text-align:center;">#</th><th class="ekstraklasa-header" style="text-align:center;">KLUB</th><th class="ekstraklasa-header" style="text-align:left; padding-left:8px;">GRACZ</th><th class="ekstraklasa-header" style="text-align:center;">PKT</th><th class="ekstraklasa-header" style="text-align:center;">3PKT</th><th class="ekstraklasa-header" style="text-align:center;">1PKT</th><th class="ekstraklasa-header" style="text-align:center;">MECZE</th></tr></thead><tbody>{rows_combined}</tbody></table></div>'
 
   st.markdown(full_html, unsafe_allow_html=True)
