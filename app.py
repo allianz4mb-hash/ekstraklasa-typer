@@ -7,9 +7,9 @@ from views.ranking import render_ranking
 from views.regulamin import render_regulamin
 from views.typowanie import render_typowanie
 
-st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide")
-
-db = database.init_supabase()
+st.set_page_config(
+    page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide"
+)
 
 
 # --- AUTOMATYCZNA SYNCHRONIZACJA W TLE (MAX RAZ NA 30 MINUT) ---
@@ -30,10 +30,12 @@ def automatyczna_synchronizacja():
 
 automatyczna_synchronizacja()
 
-# Pobieramy mecze do listy klubów
 try:
   res_mecze = (
-      db.table("mecze").select("*").order("data_meczu", desc=False).execute()
+      database.db.table("mecze")
+      .select("*")
+      .order("data_meczu", desc=False)
+      .execute()
   )
   wszystkie_mecze = res_mecze.data
 except Exception:
@@ -42,11 +44,35 @@ except Exception:
 kluby_mapa = database.pobierz_mapa_klubow_logo(wszystkie_mecze)
 lista_klubow = ["— Brak —"] + sorted(list(kluby_mapa.keys()))
 
-# --- ZARZĄDZANIE SESJĄ ---
 if "zalogowany_gracz" not in st.session_state:
   st.session_state["zalogowany_gracz"] = None
 
-st.title("⚽ Ekstraklasa Typer 2026/2027")
+
+# --- PROFESJONALNY BANER TELEWIZYJNY EKSTRAKLAPA ---
+def renderuj_naglowek_logo():
+  html_code = """
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 25px; padding: 15px; background: linear-gradient(135deg, #0b0e14 0%, #161b22 100%); border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.4); border-bottom: 3px solid #00f2ff;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="background: #ffffff; border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,242,255,0.3);">
+                <span style="font-size: 24px;">⚽</span>
+            </div>
+            <div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; color: #8f9bba; letter-spacing: 3px; text-transform: uppercase;">PKO Bank Polski</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 32px; font-weight: 900; color: #ffffff; letter-spacing: 4px; text-transform: uppercase; line-height: 1.1;">
+                    EKSTRAKLAPA
+                </div>
+            </div>
+        </div>
+        <div style="margin-top: 10px; background: linear-gradient(135deg, #0052cc 0%, #00f2ff 100%); color: #ffffff; padding: 4px 16px; border-radius: 20px; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; box-shadow: 0 3px 10px rgba(0,242,255,0.4);">
+            TYPER 2026/27
+        </div>
+    </div>
+    """
+  st.markdown(html_code, unsafe_allow_html=True)
+
+
+renderuj_naglowek_logo()
+
 
 # --- PANEL BOCZNY ---
 st.sidebar.header("👤 Panel Gracza")
