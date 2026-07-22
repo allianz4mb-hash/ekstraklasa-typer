@@ -89,15 +89,9 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
       m for m in wszystkie_mecze if m.get("kolejka") == wybrana_kolejka_raw
   ]
 
-  # POBIERAMY TYPY TYLKO DLA ZALOGOWANEGO GRACZA
-  raw_typy = (
+  dotychczasowe_typy = (
       database.pobierz_typy_gracza(zalogowany_gracz) if zalogowany_gracz else {}
   )
-
-  # BEZPIECZNIK: odfiltrowujemy słownik, aby mieć pewność, że to typy tego gracza
-  dotychczasowe_typy = {}
-  if isinstance(raw_typy, dict):
-    dotychczasowe_typy = raw_typy
 
   pogrupowane_mecze = {}
   for mecz in mecze_kolejki:
@@ -108,7 +102,10 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
 
   nowy_typy = []
 
-  with st.form(key=f"form_typy_{wybrana_kolejka_raw}"):
+  # Unikalny klucz formularza dla każdego gracza i kolejki
+  form_key = f"form_typy_{wybrana_kolejka_raw}_{zalogowany_gracz or 'gosc'}"
+
+  with st.form(key=form_key):
     for naglowek_dnia, mecze in pogrupowane_mecze.items():
       st.subheader(naglowek_dnia)
       st.markdown("---")
@@ -122,7 +119,6 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
         data_meczu = mecz.get("data_meczu", "")
         godzina_str = formatuj_godzine(data_meczu)
 
-        # SPRAWDZAMY CZY TEN KONKRETNY GRACZ OBSTAWIŁ TEN MECZ
         if zalogowany_gracz and mecz_id in dotychczasowe_typy:
           domyslne_h, domyslne_a = dotychczasowe_typy[mecz_id]
           badge_html = f"<div style='text-align: right; color: #2e7d32; font-weight: bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a}</div>"
@@ -148,7 +144,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
               min_value=0,
               max_value=15,
               value=int(domyslne_h),
-              key=f"h_{mecz_id}",
+              key=f"h_{zalogowany_gracz}_{mecz_id}",
               label_visibility="collapsed",
           )
 
@@ -170,7 +166,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
               min_value=0,
               max_value=15,
               value=int(domyslne_a),
-              key=f"a_{mecz_id}",
+              key=f"a_{zalogowany_gracz}_{mecz_id}",
               label_visibility="collapsed",
           )
 
