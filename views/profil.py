@@ -11,7 +11,7 @@ def render_profil(zalogowany_gracz):
     return
 
   st.subheader("🔑 Zmiana 4-cyfrowego PIN-u")
-  st.caption("Wpisz swój obecny PIN oraz ustal nowykod dostępu.")
+  st.caption("Wpisz swój obecny PIN oraz ustal nowy kod dostępu.")
 
   with st.form("form_zmien_pin"):
     stary_pin = st.text_input(
@@ -35,7 +35,7 @@ def render_profil(zalogowany_gracz):
     )
 
     if submit_button:
-      if not stary_pin or not nowy_pin or not powtorz_pin:
+      if not stary_pin or not nowy_pin or not powtorz_nowy_pin:
         st.error("Wszystkie pola są wymagane!")
       elif nowy_pin != powtorz_nowy_pin:
         st.error("Nowo wpisane PIN-y nie są identyczne!")
