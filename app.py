@@ -2,6 +2,7 @@ import api
 import database
 import streamlit as st
 from views.matryca import render_matryca
+from views.profil import render_profil
 from views.ranking import render_ranking
 from views.typowanie import render_typowanie
 
@@ -26,7 +27,6 @@ def automatyczna_synchronizacja():
     pass
 
 
-# Wywołujemy cichą synchronizację przy otwarciu aplikacji
 automatyczna_synchronizacja()
 
 # --- ZARZĄDZANIE SESJĄ LOGOWANIA ---
@@ -35,7 +35,7 @@ if "zalogowany_gracz" not in st.session_state:
 
 st.title("⚽ Ekstraklasa Typer 2026/2027")
 
-# --- PANEL BOCZNY: LOGOWANIE I REJESTRACJA ---
+# --- PANEL BOCZNY ---
 st.sidebar.header("👤 Panel Gracza")
 
 dostepni_gracze = database.pobierz_liste_graczy()
@@ -112,7 +112,7 @@ wybrany_gracz = st.session_state["zalogowany_gracz"]
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Zarządzanie ligą")
 
-if st.sidebar.button("🔄 Wymuś synchronizację z API"):
+if st.sidebar.button("🔄 Wymuś synchronizację z API", use_container_width=True):
   with st.spinner("Pobieranie terminarza Ekstraklasy..."):
     liga_info = api.pobierz_ligę_ekstraklasa()
 
@@ -137,10 +137,17 @@ if st.sidebar.button("🔄 Wymuś synchronizację z API"):
     else:
       st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
+# Podgląd czasu ostatniej synchronizacji
+czas_synchro = database.pobierz_czas_synchro()
+st.sidebar.caption(f"⏱️ **Ostatnia synchro:** {czas_synchro}")
+
 # --- WCHODZENIE W ZAKŁADKI ---
-tab_typowanie, tab_ranking, tab_matryca = st.tabs(
-    ["🎯 Formularz Typowania", "🏆 Tabela / Ranking", "👁️ Podgląd Typów"]
-)
+tab_typowanie, tab_ranking, tab_matryca, tab_profil = st.tabs([
+    "🎯 Formularz Typowania",
+    "🏆 Tabela / Ranking",
+    "👁️ Podgląd Typów",
+    "⚙️ Profil",
+])
 
 try:
   res_mecze = (
@@ -158,3 +165,6 @@ with tab_ranking:
 
 with tab_matryca:
   render_matryca(wszystkie_mecze, wybrany_gracz)
+
+with tab_profil:
+  render_profil(wybrany_gracz)
