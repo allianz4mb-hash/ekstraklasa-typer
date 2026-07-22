@@ -10,10 +10,12 @@ db = None
 def init_supabase():
   global db
   if db is None:
-    # Pobieramy dane z bezpiecznych sekretów Streamlit
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    db = create_client(url, key)
+    try:
+      url = st.secrets["SUPABASE_URL"]
+      key = st.secrets["SUPABASE_KEY"]
+      db = create_client(url, key)
+    except Exception:
+      pass
   return db
 
 
@@ -22,6 +24,7 @@ def haszuj_pin(pin: str) -> str:
 
 
 def pobierz_liste_graczy():
+  init_supabase()
   try:
     res = db.table("gracze").select("nick").order("nick").execute()
     return [row["nick"] for row in res.data]
@@ -30,7 +33,7 @@ def pobierz_liste_graczy():
 
 
 def pobierz_informacje_o_graczach():
-  """Zwraca słownik z informacjami o graczach (np. ulubiony klub)."""
+  init_supabase()
   try:
     res = db.table("gracze").select("nick, ulubiony_klub").execute()
     return {
@@ -41,7 +44,6 @@ def pobierz_informacje_o_graczach():
 
 
 def pobierz_mapa_klubow_logo(wszystkie_mecze):
-  """Tworzy słownik {nazwa_klubu: logo_url} z pobranych meczów."""
   mapa = {}
   for m in wszystkie_mecze:
     if m.get("gospodarze") and m.get("logo_gospodarze"):
@@ -52,6 +54,7 @@ def pobierz_mapa_klubow_logo(wszystkie_mecze):
 
 
 def zarejestruj_gracza(nick, pin, ulubiony_klub=""):
+  init_supabase()
   try:
     nick = nick.strip()
     if not nick or not pin:
@@ -73,6 +76,7 @@ def zarejestruj_gracza(nick, pin, ulubiony_klub=""):
 
 
 def weryfikuj_pin_gracza(nick, pin):
+  init_supabase()
   try:
     res = db.table("gracze").select("pin_hash").eq("nick", nick).execute()
     if res.data:
@@ -84,6 +88,7 @@ def weryfikuj_pin_gracza(nick, pin):
 
 
 def zmien_nick_gracza(stary_nick, nowy_nick):
+  init_supabase()
   try:
     nowy_nick = nowy_nick.strip()
     if not nowy_nick:
@@ -105,6 +110,7 @@ def zmien_nick_gracza(stary_nick, nowy_nick):
 
 
 def zmien_ulubiony_klub(nick, nowy_klub):
+  init_supabase()
   try:
     db.table("gracze").update({"ulubiony_klub": nowy_klub}).eq(
         "nick", nick
@@ -115,6 +121,7 @@ def zmien_ulubiony_klub(nick, nowy_klub):
 
 
 def zmien_pin_gracza(nick, nowy_pin):
+  init_supabase()
   try:
     nowy_hash = haszuj_pin(nowy_pin)
     db.table("gracze").update({"pin_hash": nowy_hash}).eq("nick", nick).execute()
@@ -124,6 +131,7 @@ def zmien_pin_gracza(nick, nowy_pin):
 
 
 def pobierz_typy_gracza(nick):
+  init_supabase()
   try:
     res = db.table("typy").select("*").eq("gracz_nick", nick).execute()
     return {
@@ -135,6 +143,7 @@ def pobierz_typy_gracza(nick):
 
 
 def pobierz_wszystkie_typy():
+  init_supabase()
   try:
     res = db.table("typy").select("*").execute()
     return res.data
@@ -143,6 +152,7 @@ def pobierz_wszystkie_typy():
 
 
 def zapisz_typy_gracza(lista_typow):
+  init_supabase()
   try:
     if not lista_typow:
       return True
@@ -153,6 +163,7 @@ def zapisz_typy_gracza(lista_typow):
 
 
 def synchronizuj_mecze_wsadowo(surowe_mecze):
+  init_supabase()
   try:
     rekordy = []
     for m in surowe_mecze:
@@ -192,6 +203,7 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
 
 
 def pobierz_czas_synchro():
+  init_supabase()
   try:
     res = (
         db.table("ustawienia")
