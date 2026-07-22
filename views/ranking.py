@@ -3,6 +3,17 @@ import pandas as pd
 import streamlit as st
 
 
+def wyciągnij_numer_kolejki(kolejka_raw):
+  if not kolejka_raw:
+    return "1"
+  if "-" in kolejka_raw:
+    parts = kolejka_raw.split("-")
+    nr = parts[-1].strip()
+    if nr.isdigit():
+      return nr
+  return kolejka_raw
+
+
 def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
   if wynik_h is None or wynik_a is None:
     return 0, False
@@ -30,8 +41,6 @@ def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
 
 
 def render_ranking(wszystkie_mecze):
-  st.header("🏆 Tabela i Klasyfikacja Generalna")
-
   gracze = database.pobierz_liste_graczy()
   wszystkie_typy = database.pobierz_wszystkie_typy()
   info_gracze = database.pobierz_informacje_o_graczach()
@@ -42,6 +51,14 @@ def render_ranking(wszystkie_mecze):
     return
 
   mapa_meczow = {m["id"]: m for m in wszystkie_mecze}
+
+  # Wyznaczamy numer bieżącej kolejki do nagłówka
+  kolejki_raw = sorted(
+      list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
+  )
+  aktualna_kolejka_nr = (
+      wyciągnij_numer_kolejki(kolejki_raw[0]) if kolejki_raw else "1"
+  )
 
   statystyki = {
       g: {
@@ -96,9 +113,43 @@ def render_ranking(wszystkie_mecze):
     max-width: 900px;
     margin: 0 auto;
     background-color: #0b0e14;
-    padding: 12px;
+    padding: 15px;
     border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.tv-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #06090e;
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #00f2ff;
+}
+.tv-logo-title {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.tv-logo-sub {
+    color: #8f9bba;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+.tv-round-badge {
+    background: linear-gradient(135deg, #0052cc 0%, #00f2ff 100%);
+    color: #ffffff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 2px 8px rgba(0,242,255,0.3);
 }
 .ekstraklasa-table {
     width: 100%;
@@ -180,6 +231,14 @@ def render_ranking(wszystkie_mecze):
 }
 </style>"""
 
+  tv_header_html = f"""<div class="tv-header">
+    <div>
+        <div class="tv-logo-sub">PKO BANK POLSKI</div>
+        <div class="tv-logo-title">⚽ EKSTRAKLAPA</div>
+    </div>
+    <div class="tv-round-badge">{aktualna_kolejka_nr}. KOLEJKA</div>
+</div>"""
+
   html_rows = []
   for idx, row in df.iterrows():
     miejsce = idx + 1
@@ -205,12 +264,11 @@ def render_ranking(wszystkie_mecze):
     else:
       klasa_pos = "pos-srodek"
 
-    # Nowy układ: Punkty tuż po nicku!
     row_html = f'<tr class="ekstraklasa-row {klasa_pos}"><td class="cell-pos">{miejsce}</td><td class="cell-logo">{logo_img}</td><td class="cell-nick">{nick}</td><td class="cell-pts">{pts}</td><td class="cell-stat">{dok}</td><td class="cell-stat">{traf}</td><td class="cell-stat-last">{mcz}</td></tr>'
     html_rows.append(row_html)
 
   rows_combined = "".join(html_rows)
 
-  full_html = f'{css_style}<div class="ekstraklasa-container"><table class="ekstraklasa-table"><thead><tr><th class="ekstraklasa-header" style="text-align:center;">#</th><th class="ekstraklasa-header" style="text-align:center;">KLUB</th><th class="ekstraklasa-header" style="text-align:left; padding-left:8px;">GRACZ</th><th class="ekstraklasa-header" style="text-align:center;">PKT</th><th class="ekstraklasa-header" style="text-align:center;">3PKT</th><th class="ekstraklasa-header" style="text-align:center;">1PKT</th><th class="ekstraklasa-header" style="text-align:center;">MECZE</th></tr></thead><tbody>{rows_combined}</tbody></table></div>'
+  full_html = f'{css_style}<div class="ekstraklasa-container">{tv_header_html}<table class="ekstraklasa-table"><thead><tr><th class="ekstraklasa-header" style="text-align:center;">#</th><th class="ekstraklasa-header" style="text-align:center;">KLUB</th><th class="ekstraklasa-header" style="text-align:left; padding-left:8px;">GRACZ</th><th class="ekstraklasa-header" style="text-align:center;">PKT</th><th class="ekstraklasa-header" style="text-align:center;">3PKT</th><th class="ekstraklasa-header" style="text-align:center;">1PKT</th><th class="ekstraklasa-header" style="text-align:center;">MECZE</th></tr></thead><tbody>{rows_combined}</tbody></table></div>'
 
   st.markdown(full_html, unsafe_allow_html=True)
