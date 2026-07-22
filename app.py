@@ -12,14 +12,8 @@ st.set_page_config(page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide
 
 db = database.init_supabase()
 
-
 # --- INICJALIZACJA OBSŁUGI CIASTECZEK (TRWAŁA SESJA) ---
-@st.cache_resource
-def get_cookie_manager():
-  return stx.CookieManager()
-
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager()
 
 
 # --- AUTOMATYCZNA SYNCHRONIZACJA W TLE (MAX RAZ NA 30 MINUT) ---
