@@ -6,12 +6,14 @@ import streamlit as st
 def wyciągnij_numer_kolejki(kolejka_raw):
   if not kolejka_raw:
     return "1"
-  if "-" in kolejka_raw:
-    parts = kolejka_raw.split("-")
+  if "-" in str(kolejka_raw):
+    parts = str(kolejka_raw).split("-")
     nr = parts[-1].strip()
     if nr.isdigit():
       return nr
-  return kolejka_raw
+  if str(kolejka_raw).isdigit():
+    return str(kolejka_raw)
+  return "1"
 
 
 def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
@@ -52,7 +54,7 @@ def render_ranking(wszystkie_mecze):
 
   mapa_meczow = {m["id"]: m for m in wszystkie_mecze}
 
-  # Wyznaczamy numer bieżącej kolejki do nagłówka
+  # Numer kolejki
   kolejki_raw = sorted(
       list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
   )
@@ -231,13 +233,7 @@ def render_ranking(wszystkie_mecze):
 }
 </style>"""
 
-  tv_header_html = f"""<div class="tv-header">
-    <div>
-        <div class="tv-logo-sub">PKO BANK POLSKI</div>
-        <div class="tv-logo-title">⚽ EKSTRAKLAPA</div>
-    </div>
-    <div class="tv-round-badge">{aktualna_kolejka_nr}. KOLEJKA</div>
-</div>"""
+  tv_header_html = f'<div class="tv-header"><div><div class="tv-logo-sub">PKO BANK POLSKI</div><div class="tv-logo-title">⚽ EKSTRAKLAPA</div></div><div class="tv-round-badge">{aktualna_kolejka_nr}. KOLEJKA</div></div>'
 
   html_rows = []
   for idx, row in df.iterrows():
