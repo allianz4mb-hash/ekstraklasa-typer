@@ -38,7 +38,6 @@ def weryfikuj_pin_gracza(nick: str, wpisany_pin: str) -> bool:
     if res.data:
       db_pin = str(res.data[0].get("pin", "") or "").strip()
       wpisany_hashed = hash_pin(wpisany_pin)
-      # Sprawdzamy szyfrowany PIN lub bezpośrednio (kompatybilność wsteczna dla starych wpisów)
       return db_pin == wpisany_hashed or db_pin == str(wpisany_pin).strip()
     return False
   except Exception as e:
@@ -85,26 +84,31 @@ def zmien_pin_gracza(nick: str, nowy_pin: str):
 
 
 def zapisz_czas_synchro():
-  teraz = datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%Y-%m-%d %H:%M:%S")
+  teraz = datetime.now(ZoneInfo("Europe/Warsaw")).isoformat()
   try:
     supabase.table("ustawienia").upsert(
-        {"klucz": "ostatnia_synchro", "wartosc": teraz}
+        {"id": 1, "ostatnia_sync": teraz}, on_conflict="id"
     ).execute()
-  except Exception:
-    pass
+  except Exception as e:
+    st.error(f"Błąd zapisu czasu synchronizacji: {e}")
 
 
 def pobierz_czas_synchro():
   try:
     res = (
         supabase.table("ustawienia")
-        .select("wartosc")
-        .eq("klucz", "ostatnia_synchro")
+        .select("ostatnia_sync")
+        .eq("id", 1)
         .execute()
     )
-    if res.data and res.data[0].get("wartosc"):
-      dt_str = res.data[0].get("wartosc")
-      dt = datetime.fromisoformat(dt_str)
+    if res.data and len(res.data) > 0 and res.data[0].get("ostatnia_sync"):
+      dt_raw = str(res.data[0].get("ostatnia_sync"))
+      if dt_raw.endswith("Z"):
+        dt_raw = dt_raw[:-1] + "+00:00"
+
+      dt = datetime.fromisoformat(dt_raw)
+      if dt.tzinfo:
+        dt = dt.astimezone(ZoneInfo("Europe/Warsaw"))
       return dt.strftime("%d.%m.%Y, godz. %H:%M")
     return "Brak danych"
   except Exception:
