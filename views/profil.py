@@ -14,11 +14,9 @@ def render_profil(zalogowany_gracz, wszystkie_mecze=[]):
 
   col1, col2 = st.columns(2)
 
-  # Mapa klubów i logo
   kluby_mapa = database.pobierz_mapa_klubow_logo(wszystkie_mecze)
   lista_klubow = ["— Brak —"] + sorted(list(kluby_mapa.keys()))
 
-  # Pobranie aktualnego klubu gracza
   info_gracze = database.pobierz_informacje_o_graczach()
   obecny_klub = info_gracze.get(zalogowany_gracz, {}).get(
       "ulubiony_klub", "— Brak —"
@@ -37,33 +35,34 @@ def render_profil(zalogowany_gracz, wszystkie_mecze=[]):
           else 0
       )
       nowy_klub = st.selectbox(
-          "Ulubiony Klub Ekstraklasy:", lista_klubow, index=idx_klub
+          "Ulubiony Klub Ekstraklasy:",
+          lista_klubow,
+          index=idx_klub,
+          help="Logo wybranego klubu będzie wyświetlać się przy Twoim nicku w tabeli!",
       )
 
       btn_zapisz = st.form_submit_button(
-          "💾 Zapisz zmiany", use_container_width=True, type="primary"
+          "💾 Zapisz zmiany w profilu", use_container_width=True, type="primary"
       )
 
       if btn_zapisz:
         nowy_nick_clean = nowy_nick.strip()
         klub_val = "" if nowy_klub == "— Brak —" else nowy_klub
 
-        # Zmiana klubu
         database.zmien_ulubiony_klub(zalogowany_gracz, klub_val)
 
-        # Zmiana nicku
         if nowy_nick_clean != zalogowany_gracz and nowy_nick_clean:
           sukces, msg = database.zmien_nick_gracza(
               zalogowany_gracz, nowy_nick_clean
           )
           if sukces:
             st.session_state["zalogowany_gracz"] = nowy_nick_clean
-            st.success("✅ Zaktualizowano profil!")
+            st.success("✅ Zaktualizowano nick oraz klub!")
             st.rerun()
           else:
             st.error(msg)
         else:
-          st.success("✅ Zaktualizowano klub!")
+          st.success("✅ Zaktualizowano ulubiony klub!")
           st.rerun()
 
   with col2:
