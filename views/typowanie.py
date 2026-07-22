@@ -1,179 +1,139 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import database
 import streamlit as st
-import utils
 
 
-def render_typowanie(wszystkie_mecze, wybrany_gracz):
+def daj_klimatyczny_naglowek(data_iso_str):
+  """Zamienia datę ISO na klimatyczny nagłówek dnia tygodnia."""
+  try:
+    if data_iso_str.endswith("Z"):
+      data_iso_str = data_iso_str[:-1] + "+00:00"
+
+    dt = datetime.fromisoformat(data_iso_str).astimezone(
+        ZoneInfo("Europe/Warsaw")
+    )
+    dzien_tygodnia = dt.weekday()  # 0=Mon, 1=Tue, ..., 6=Sun
+    data_ladna = dt.strftime("%d.%m.%Y")
+
+    slogany = {
+        4: f"🔥 Super Piątek — {data_ladna}",
+        5: f"⚡ Gorączka Piłkarskiej Soboty — {data_ladna}",
+        6: f"⚽ Grana Niedziela — {data_ladna}",
+        0: f"🌙 Poniedziałkowa Ekstraklasa po godzinach — {data_ladna}",
+        1: f"⚽ Piłkarski Wtorek — {data_ladna}",
+        2: f"⚽ Meczowa Środa — {data_ladna}",
+        3: f"⚽ Czwartek z Ekstraklasą — {data_ladna}",
+    }
+    return slogany.get(dzien_tygodnia, f"📅 {data_ladna}"), dt
+  except Exception:
+    return data_iso_str, None
+
+
+def render_typowanie(wszystkie_mecze, zalogowany_gracz):
   st.header("🎯 Formularz Typowania")
 
+  if not zalogowany_gracz:
+    st.info("💡 Zaloguj się w panelu bocznym, aby móc zapisywać swoje typy!")
+
   if not wszystkie_mecze:
-    st.info(
-        "Brak meczów w bazie. Kliknij **'Synchronizuj terminarz z API'** w"
-        " panelu bocznym!"
-    )
+    st.warning("Brak meczów w bazie danych. Wykonaj synchronizację w panelu.")
     return
 
+  # Wybór kolejki
   kolejki = sorted(
-      list(set(m["kolejka"] for m in wszystkie_mecze)),
-      key=utils.wyciagnij_numer_kolejki,
+      list(set(m.get("kolejka", "Kolejka 1") for m in wszystkie_mecze))
   )
   wybrana_kolejka = st.selectbox("Wybierz kolejkę do wytypowania:", kolejki)
 
-  mecze_w_kolejce = [
-      m for m in wszystkie_mecze if m["kolejka"] == wybrana_kolejka
+  mecze_kolejki = [
+      m for m in wszystkie_mecze if m.get("kolejka") == wybrana_kolejka
   ]
 
+  # Pobranie dotychczasowych typów gracza
   dotychczasowe_typy = (
-      database.pobierz_typy_gracza(wybrany_gracz) if wybrany_gracz else {}
+      database.pobierz_typy_gracza(zalogowany_gracz) if zalogowany_gracz else {}
   )
 
-  if not wybrany_gracz:
-    st.warning(
-        "🔒 Zaloguj się lub zarejestruj w panelu bocznym po lewej stronie, aby"
-        " typować!"
-    )
+  # Grupowanie meczów po nagłówkach dni
+  pogrupowane_mecze = {}
+  for mecz in mecze_kolejki:
+    naglowek, dt = daj_klimatyczny_naglowek(mecz.get("data_meczu", ""))
+    if naglowek not in pogrupowane_mecze:
+      pogrupowane_mecze[naglowek] = []
+    pogrupowane_mecze[naglowek].append(mecz)
 
-  with st.form("formularz_typowania"):
-    nowe_typy = {}
+  nowe_typy = []
 
-    for mecz in mecze_w_kolejce:
-      mecz_id = mecz["id"]
-      zapisany_typ = dotychczasowe_typy.get(mecz_id, None)
-
-      data_f = utils.formatuj_date(mecz.get("data_meczu"))
-      zablokowany = utils.czy_mecz_zablokowany(
-          mecz.get("data_meczu"), mecz.get("status")
-      )
-
-      col_header1, col_header2 = st.columns([2, 2])
-      with col_header1:
-        st.caption(f"⏱️ {data_f}")
-
-      with col_header2:
-        if zablokowany:
-          if zapisany_typ is not None:
-            st.markdown(
-                f"<div style='text-align: right; color: #d32f2f; font-weight:"
-                f" bold;'>🔒 Zamknięte (Twój typ: {zapisany_typ[0]} -"
-                f" {zapisany_typ[1]})</div>",
-                unsafe_allow_html=True,
-            )
-          else:
-            st.markdown(
-                "<div style='text-align: right; color: #d32f2f; font-weight:"
-                " bold;'>🔒 Zamknięte (Brak typu)</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-          if zapisany_typ is not None:
-            st.markdown(
-                f"<div style='text-align: right; color: #2e7d32; font-weight:"
-                f" bold;'>🟢 Obstawiono: {zapisany_typ[0]} -"
-                f" {zapisany_typ[1]}</div>",
-                unsafe_allow_html=True,
-            )
-          else:
-            st.markdown(
-                "<div style='text-align: right; color: #888888;'>⚪ Brak"
-                " typu</div>",
-                unsafe_allow_html=True,
-            )
-
-      col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 3])
-
-      logo_h = mecz.get("logo_gospodarze")
-      logo_a = mecz.get("logo_goscie")
-
-      with col1:
-        if logo_h:
-          st.markdown(
-              f"<div style='display: flex; align-items: center; gap:"
-              f" 10px;'><img src='{logo_h}' width='28' height='28'/>"
-              f" <b>{mecz['gospodarze']}</b></div>",
-              unsafe_allow_html=True,
-          )
-        else:
-          st.write(f"**{mecz['gospodarze']}**")
-
-      domyslna_gosp = int(zapisany_typ[0]) if zapisany_typ is not None else 0
-      domyslna_gosc = int(zapisany_typ[1]) if zapisany_typ is not None else 0
-
-      disabled_flag = (not wybrany_gracz) or zablokowany
-
-      # Dynamiczny klucz zawierający nick gracza chroni przed przeskakiwaniem wartości
-      key_gosp = (
-          f"gosp_{wybrany_gracz}_{mecz_id}"
-          if wybrany_gracz
-          else f"gosp_anon_{mecz_id}"
-      )
-      key_gosc = (
-          f"gosc_{wybrany_gracz}_{mecz_id}"
-          if wybrany_gracz
-          else f"gosc_anon_{mecz_id}"
-      )
-
-      with col2:
-        typ_gosp = st.number_input(
-            "Gospodarze",
-            min_value=0,
-            max_value=15,
-            value=domyslna_gosp,
-            key=key_gosp,
-            label_visibility="collapsed",
-            disabled=disabled_flag,
-        )
-
-      with col3:
-        st.markdown(
-            "<h4 style='text-align: center; margin: 0;'>:</h4>",
-            unsafe_allow_html=True,
-        )
-
-      with col4:
-        typ_gosc = st.number_input(
-            "Goście",
-            min_value=0,
-            max_value=15,
-            value=domyslna_gosc,
-            key=key_gosc,
-            label_visibility="collapsed",
-            disabled=disabled_flag,
-        )
-
-      with col5:
-        if logo_a:
-          st.markdown(
-              f"<div style='display: flex; align-items: center; gap:"
-              f" 10px;'><img src='{logo_a}' width='28' height='28'/>"
-              f" <b>{mecz['goscie']}</b></div>",
-              unsafe_allow_html=True,
-          )
-        else:
-          st.write(f"**{mecz['goscie']}**")
-
+  with st.form(key=f"form_typy_{wybrana_kolejka}"):
+    for naglowek_dnia, mecze in pogrupowane_mecze.items():
+      st.subheader(naglowek_dnia)
       st.markdown("---")
 
-      if wybrany_gracz and not zablokowany:
-        nowe_typy[mecz_id] = {
-            "gracz_nick": wybrany_gracz,
-            "mecz_id": mecz_id,
-            "typ_gospodarze": typ_gosp,
-            "typ_goscie": typ_gosc,
-        }
+      for mecz in mecze:
+        mecz_id = mecz["id"]
+        gospodarze = mecz.get("gospodarze", "Gospodarze")
+        goscie = mecz.get("goscie", "Goście")
+        logo_h = mecz.get("logo_gospodarze", "")
+        logo_a = mecz.get("logo_goscie", "")
 
-    zapisz_button = st.form_submit_button(
-        "💾 Zapisz moje typy na tę kolejkę",
-        use_container_width=True,
-        type="primary",
-        disabled=not wybrany_gracz,
+        # Pobieramy zapisany typ jeśli istnieje
+        domyslne_h, domyslne_a = dotychczasowe_typy.get(mecz_id, (0, 0))
+
+        col_h, col_vs, col_a = st.columns([4, 1, 4])
+
+        with col_h:
+          c1, c2 = st.columns([1, 4])
+          if logo_h:
+            c1.image(logo_h, width=30)
+          c2.markdown(f"**{gospodarze}**")
+          typ_h = st.number_input(
+              f"Gole {gospodarze}",
+              min_value=0,
+              max_value=15,
+              value=int(domyslne_h),
+              key=f"h_{mecz_id}",
+              label_visibility="collapsed",
+          )
+
+        with col_vs:
+          st.markdown("<h3 style='text-align: center;'>:</h3>", unsafe_allow_html=True)
+
+        with col_a:
+          c1, c2 = st.columns([4, 1])
+          c1.markdown(f"<div style='text-align: right;'><b>{goscie}</b></div>", unsafe_allow_html=True)
+          if logo_a:
+            c2.image(logo_a, width=30)
+          typ_a = st.number_input(
+              f"Gole {goscie}",
+              min_value=0,
+              max_value=15,
+              value=int(domyslne_a),
+              key=f"a_{mecz_id}",
+              label_visibility="collapsed",
+          )
+
+        if zalogowany_gracz:
+          nowe_typy.append({
+              "gracz_nick": zalogowany_gracz,
+              "mecz_id": mecz_id,
+              "typ_gospodarze": typ_h,
+              "typ_goscie": typ_a,
+          })
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    przycisk_zapisz = st.form_submit_button(
+        "💾 Zapisz moje typy", use_container_width=True, type="primary"
     )
 
-    if zapisz_button and wybrany_gracz:
-      paczka_do_zapisu = list(nowe_typy.values())
-      if paczka_do_zapisu:
-        sukces = database.zapisz_typy_gracza(paczka_do_zapisu)
-        if sukces:
-          st.success("✅ Pomyślnie zapisano Twoje typy!")
-          st.rerun()
+    if przycisk_zapisz:
+      if not zalogowany_gracz:
+        st.error("Musisz być zalogowany, aby zapisać typy!")
       else:
-        st.info("Brak aktywnych meczów do zapisania w tej kolejce.")
+        sukces = database.zapisz_typy_gracza(nowe_typy)
+        if sukces:
+          st.success("✅ Twoje typy zostały pomyślnie zapisane w bazie!")
+          st.rerun()
+        else:
+          st.error("Błąd podczas zapisu typów.")
