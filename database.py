@@ -110,7 +110,6 @@ def pobierz_wszystkie_typy():
 def zapisz_typy_gracza(lista_typow):
   if not lista_typow:
     return True
-  # Ręczny upsert dla typów omijający błędy
   res = db.table("typy").select("gracz_nick, mecz_id").execute()
   istniejace = {(r["gracz_nick"], r["mecz_id"]) for r in res.data}
   
@@ -128,6 +127,7 @@ def zapisz_typy_gracza(lista_typow):
 
 def synchronizuj_mecze_wsadowo(surowe_mecze):
   if not surowe_mecze:
+    st.sidebar.error("⚠️ API zwróciło pustą listę meczów!")
     return False
 
   rekordy = []
@@ -177,37 +177,56 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
         "wynik": wynik_str,
     })
 
-  if rekordy:
+  if not rekordy:
+    st.sidebar.error("⚠️ Nie wygenerowano żadnych rekordów z danych API.")
+    return False
+
+  try:
+    # 1. POBRANIE ISTNIEJĄCYCH
     try:
-      # Całkowite ominięcie problemu UPSERT bez klucza PK w Supabase
-      res = db.table("mecze").select("id").execute()
-      istniejace_id = [row["id"] for row in res.data] if res.data else []
-
-      do_dodania = [r for r in rekordy if r["id"] not in istniejace_id]
-      do_aktualizacji = [r for r in rekordy if r["id"] in istniejace_id]
-
-      if do_dodania:
-        db.table("mecze").insert(do_dodania).execute()
-
-      for r in do_aktualizacji:
-        db.table("mecze").update(r).eq("id", r["id"]).execute()
-
-      teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
-          "%d.%m.%Y %H:%M:%S"
-      )
-      
-      ust_res = db.table("ustawienia").select("klucz").eq("klucz", "ostatnia_synchro").execute()
-      if ust_res.data:
-          db.table("ustawienia").update({"wartosc": teraz_warszawa}).eq("klucz", "ostatnia_synchro").execute()
-      else:
-          db.table("ustawienia").insert({"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa}).execute()
-          
-      return True
+        res = db.table("mecze").select("id").execute()
+        istniejace_id = [row["id"] for row in res.data] if res.data else []
     except Exception as e:
-      st.error(f"⚠️ SZCZEGÓŁY BŁĘDU BAZY: {str(e)}")
-      return False
+        st.sidebar.error(f"❌ BŁĄD POBIERANIA Z SUPABASE: {str(e)}")
+        return False
 
-  return False
+    do_dodania = [r for r in rekordy if r["id"] not in istniejace_id]
+    do_aktualizacji = [r for r in rekordy if r["id"] in istniejace_id]
+
+    # 2. WSTAWIANIE NOWYCH
+    if do_dodania:
+        try:
+            db.table("mecze").insert(do_dodania).execute()
+        except Exception as e:
+            st.sidebar.error(f"❌ BŁĄD WSTAWIANIA (INSERT): {str(e)}")
+            return False
+
+    # 3. AKTUALIZACJA STARYCH
+    for r in do_aktualizacji:
+        try:
+            db.table("mecze").update(r).eq("id", r["id"]).execute()
+        except Exception as e:
+            st.sidebar.error(f"❌ BŁĄD AKTUALIZACJI (Mecz ID {r['id']}): {str(e)}")
+            return False
+
+    # 4. AKTUALIZACJA CZASU SYNCHRONIZACJI
+    try:
+        teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
+            "%d.%m.%Y %H:%M:%S"
+        )
+        ust_res = db.table("ustawienia").select("klucz").eq("klucz", "ostatnia_synchro").execute()
+        if ust_res.data:
+            db.table("ustawienia").update({"wartosc": teraz_warszawa}).eq("klucz", "ostatnia_synchro").execute()
+        else:
+            db.table("ustawienia").insert({"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa}).execute()
+    except Exception as e:
+        st.sidebar.error(f"❌ BŁĄD ZAPISU DATY SYNCHRONIZACJI: {str(e)}")
+
+    return True
+
+  except Exception as e:
+    st.sidebar.error(f"❌ NIEZNANY BŁĄD BAZY: {str(e)}")
+    return False
 
 
 def pobierz_czas_synchro():
