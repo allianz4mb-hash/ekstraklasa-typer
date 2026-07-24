@@ -24,7 +24,7 @@ def wyznacz_aktualna_kolejke(wszystkie_mecze):
 
   teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
   kolejki_dict = {}
-  
+
   for m in wszystkie_mecze:
     nr = wyciągnij_numer_kolejki(m.get("kolejka"))
     data_str = m.get("data_meczu", "")
@@ -33,7 +33,9 @@ def wyznacz_aktualna_kolejke(wszystkie_mecze):
       try:
         if data_str.endswith("Z"):
           data_str = data_str[:-1] + "+00:00"
-        dt = datetime.fromisoformat(data_str).astimezone(ZoneInfo("Europe/Warsaw"))
+        dt = datetime.fromisoformat(data_str).astimezone(
+            ZoneInfo("Europe/Warsaw")
+        )
       except Exception:
         dt = None
     else:
@@ -57,12 +59,20 @@ def wyznacz_aktualna_kolejke(wszystkie_mecze):
 
 
 def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
-  # TABELA PUNKTUJE TYLKO ZAKOŃCZONE MECZE, ABY UNIKNĄĆ SKAKANIA WYNIKÓW
-  if status_meczu not in ["FT", "AET", "PEN"]:
-    return 0, False
+  # Akceptujemy wszystkie warianty oznaczenia zakończonego meczu
+  st_check = str(status_meczu).upper()
+  zakończony = any(
+      s in st_check
+      for s in ["FT", "FINISHED", "ENDED", "CLOSED", "POST", "AET", "PEN"]
+  )
 
+  # Jeśli wynik jest wpisany, również traktujemy go jako rozegrany
   if wynik_h is None or wynik_a is None:
     return 0, False
+
+  if not zakończony and status_meczu != "LIVE":
+    # Pozwala zliczać mecze, które fizycznie posiadają wpisany wynik
+    pass
 
   try:
     typ_h, typ_a = int(typ_h), int(typ_a)
@@ -70,9 +80,11 @@ def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
   except (ValueError, TypeError):
     return 0, False
 
+  # Trafienie dokładnego wyniku -> 3 pkt
   if typ_h == wynik_h and typ_a == wynik_a:
     return 3, True
 
+  # Trafienie rozstrzygnięcia (1X2) -> 1 pkt
   roznica_typ = typ_h - typ_a
   roznica_wynik = wynik_h - wynik_a
 
@@ -115,14 +127,24 @@ def render_ranking(wszystkie_mecze):
     nick = t.get("gracz_nick")
     mecz_id = t.get("mecz_id")
 
-    if nick in statystyki and mecz_id in mapa_meczow:
+    # Dopasowanie nicku (obsluguje przypadki "Mateusz" vs "Mateusz Bielecki")
+    dopasowany_nick = None
+    if nick in statystyki:
+      dopasowany_nick = nick
+    else:
+      for g in gracze:
+        if g.lower() in str(nick).lower() or str(nick).lower() in g.lower():
+          dopasowany_nick = g
+          break
+
+    if dopasowany_nick and mecz_id in mapa_meczow:
       mecz = mapa_meczow[mecz_id]
       status = mecz.get("status", "")
       gole_h = mecz.get("gole_gospodarze")
       gole_a = mecz.get("gole_goscie")
       wynik_str = mecz.get("wynik", "")
 
-      if wynik_str and wynik_str != "- : -":
+      if gole_h is not None and gole_a is not None and wynik_str != "- : -":
         pts, dokladny = oblicz_punkty_za_mecz(
             t.get("typ_gospodarze"),
             t.get("typ_goscie"),
@@ -131,14 +153,13 @@ def render_ranking(wszystkie_mecze):
             status,
         )
 
-        statystyki[nick]["Punkty"] += pts
-        if pts > 0:
-            statystyki[nick]["Mecze"] += 1 
+        statystyki[dopasowany_nick]["Punkty"] += pts
+        statystyki[dopasowany_nick]["Mecze"] += 1
 
         if pts == 3:
-          statystyki[nick]["Dokładne"] += 1
+          statystyki[dopasowany_nick]["Dokładne"] += 1
         elif pts == 1:
-          statystyki[nick]["Trafione"] += 1
+          statystyki[dopasowany_nick]["Trafione"] += 1
 
   df = pd.DataFrame(list(statystyki.values()))
   df = df.sort_values(
