@@ -19,14 +19,12 @@ def wyciągnij_numer_kolejki(kolejka_raw):
 
 
 def wyznacz_aktualna_kolejke(wszystkie_mecze):
-  """Dynamicznie wyznacza numer kolejki na podstawie aktualnej daty w Polsce."""
   if not wszystkie_mecze:
     return "1"
 
   teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
-
-  # Grupujemy mecze według numeru kolejki
   kolejki_dict = {}
+  
   for m in wszystkie_mecze:
     nr = wyciągnij_numer_kolejki(m.get("kolejka"))
     data_str = m.get("data_meczu", "")
@@ -35,9 +33,7 @@ def wyznacz_aktualna_kolejke(wszystkie_mecze):
       try:
         if data_str.endswith("Z"):
           data_str = data_str[:-1] + "+00:00"
-        dt = datetime.fromisoformat(data_str).astimezone(
-            ZoneInfo("Europe/Warsaw")
-        )
+        dt = datetime.fromisoformat(data_str).astimezone(ZoneInfo("Europe/Warsaw"))
       except Exception:
         dt = None
     else:
@@ -50,20 +46,21 @@ def wyznacz_aktualna_kolejke(wszystkie_mecze):
 
   posortowane_nry = sorted(kolejki_dict.keys())
 
-  # Szukamy pierwszej kolejki, która ma jeszcze nie zakończone/przyszłe mecze
   for nr in posortowane_nry:
     daty = kolejki_dict[nr]
     if daty:
-      max_data = max(daty)  # data ostatniego meczu w danej kolejce
-      # Jeśli ostatni mecz w kolejce minął dawniej niż 3 godziny temu, sprawdzamy następną
+      max_data = max(daty)
       if teraz < max_data:
         return str(nr)
 
-  # Jeśli wszystkie kolejki z bazy minęły, zwracamy ostatnią
   return str(posortowane_nry[-1]) if posortowane_nry else "1"
 
 
 def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
+  # TABELA PUNKTUJE TYLKO ZAKOŃCZONE MECZE, ABY UNIKNĄĆ SKAKANIA WYNIKÓW
+  if status_meczu not in ["FT", "AET", "PEN"]:
+    return 0, False
+
   if wynik_h is None or wynik_a is None:
     return 0, False
 
@@ -100,8 +97,6 @@ def render_ranking(wszystkie_mecze):
     return
 
   mapa_meczow = {m["id"]: m for m in wszystkie_mecze}
-
-  # Dynamiczne wyznaczenie numeru kolejki na żywo
   aktualna_kolejka_nr = wyznacz_aktualna_kolejke(wszystkie_mecze)
 
   statystyki = {
@@ -137,7 +132,8 @@ def render_ranking(wszystkie_mecze):
         )
 
         statystyki[nick]["Punkty"] += pts
-        statystyki[nick]["Mecze"] += 1
+        if pts > 0:
+            statystyki[nick]["Mecze"] += 1 
 
         if pts == 3:
           statystyki[nick]["Dokładne"] += 1
