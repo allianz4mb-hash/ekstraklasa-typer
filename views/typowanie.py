@@ -5,7 +5,6 @@ import streamlit as st
 
 
 def wyciagnij_nr_kolejki(kolejka_raw):
-  """Wyciąga czystą liczbę z tekstu np. 'Regular Season - 10' -> 10 do prawidłowego sortowania."""
   if not kolejka_raw:
     return 0
   if "-" in str(kolejka_raw):
@@ -19,7 +18,6 @@ def wyciagnij_nr_kolejki(kolejka_raw):
 
 
 def formatuj_nazwe_kolejki(kolejka_raw):
-  """Zamienia np. 'Regular Season - 1' na '1. Kolejka PKO BP Ekstraklapy'."""
   nr = wyciagnij_nr_kolejki(kolejka_raw)
   if nr != 999 and nr != 0:
     return f"{nr}. Kolejka PKO BP Ekstraklapy"
@@ -73,7 +71,6 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
     st.warning("Brak meczów w bazie danych. Wykonaj synchronizację w panelu.")
     return
 
-  # PRAWIDŁOWE SORTOWANIE NUMERYCZNE
   surowe_kolejki = list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
   surowe_kolejki = sorted(surowe_kolejki, key=wyciagnij_nr_kolejki)
 
@@ -102,7 +99,6 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
 
   nowy_typy = []
 
-  # Unikalny klucz formularza dla każdego gracza i kolejki
   form_key = f"form_typy_{wybrana_kolejka_raw}_{zalogowany_gracz or 'gosc'}"
 
   with st.form(key=form_key):
@@ -119,12 +115,32 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
         data_meczu = mecz.get("data_meczu", "")
         godzina_str = formatuj_godzine(data_meczu)
 
+        # BLOKADA CZASOWA - SPRAWDZAMY CZY MECZ JUŻ SIĘ ROZPOCZĄŁ
+        mecz_rozpocziety = False
+        if data_meczu:
+          try:
+            if data_meczu.endswith("Z"):
+              dt_str = data_meczu[:-1] + "+00:00"
+            else:
+              dt_str = data_meczu
+            dt_meczu = datetime.fromisoformat(dt_str).astimezone(ZoneInfo("Europe/Warsaw"))
+            if datetime.now(ZoneInfo("Europe/Warsaw")) >= dt_meczu:
+              mecz_rozpocziety = True
+          except Exception:
+            pass
+
         if zalogowany_gracz and mecz_id in dotychczasowe_typy:
           domyslne_h, domyslne_a = dotychczasowe_typy[mecz_id]
-          badge_html = f"<div style='text-align: right; color: #2e7d32; font-weight: bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a}</div>"
+          if mecz_rozpocziety:
+              badge_html = f"<div style='text-align: right; color: #d32f2f; font-weight: bold;'>🔒 Zablokowane (Typ: {domyslne_h} - {domyslne_a})</div>"
+          else:
+              badge_html = f"<div style='text-align: right; color: #2e7d32; font-weight: bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a}</div>"
         else:
           domyslne_h, domyslne_a = 0, 0
-          badge_html = "<div style='text-align: right; color: #757575;'>⚪ Brak typu</div>"
+          if mecz_rozpocziety:
+              badge_html = "<div style='text-align: right; color: #d32f2f; font-weight: bold;'>🔒 Zablokowane (Brak typu)</div>"
+          else:
+              badge_html = "<div style='text-align: right; color: #757575;'>⚪ Brak typu</div>"
 
         col_info1, col_info2 = st.columns([1, 1])
         with col_info1:
@@ -146,6 +162,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
               value=int(domyslne_h),
               key=f"h_{zalogowany_gracz}_{mecz_id}",
               label_visibility="collapsed",
+              disabled=mecz_rozpocziety  # APLIKACJA BLOKADY!
           )
 
         with col_vs:
@@ -168,9 +185,10 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
               value=int(domyslne_a),
               key=f"a_{zalogowany_gracz}_{mecz_id}",
               label_visibility="collapsed",
+              disabled=mecz_rozpocziety  # APLIKACJA BLOKADY!
           )
 
-        if zalogowany_gracz:
+        if zalogowany_gracz and not mecz_rozpocziety:
           nowy_typy.append({
               "gracz_nick": zalogowany_gracz,
               "mecz_id": mecz_id,
