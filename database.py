@@ -110,7 +110,19 @@ def pobierz_wszystkie_typy():
 def zapisz_typy_gracza(lista_typow):
   if not lista_typow:
     return True
-  db.table("typy").upsert(lista_typow, on_conflict="gracz_nick,mecz_id").execute()
+  # Ręczny upsert dla typów omijający błędy
+  res = db.table("typy").select("gracz_nick, mecz_id").execute()
+  istniejace = {(r["gracz_nick"], r["mecz_id"]) for r in res.data}
+  
+  do_dodania = []
+  for t in lista_typow:
+    if (t["gracz_nick"], t["mecz_id"]) in istniejace:
+      db.table("typy").update({"typ_gospodarze": t["typ_gospodarze"], "typ_goscie": t["typ_goscie"]}).eq("gracz_nick", t["gracz_nick"]).eq("mecz_id", t["mecz_id"]).execute()
+    else:
+      do_dodania.append(t)
+      
+  if do_dodania:
+    db.table("typy").insert(do_dodania).execute()
   return True
 
 
@@ -167,15 +179,29 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
 
   if rekordy:
     try:
-      db.table("mecze").upsert(rekordy, on_conflict="id").execute()
+      # Całkowite ominięcie problemu UPSERT bez klucza PK w Supabase
+      res = db.table("mecze").select("id").execute()
+      istniejace_id = [row["id"] for row in res.data] if res.data else []
+
+      do_dodania = [r for r in rekordy if r["id"] not in istniejace_id]
+      do_aktualizacji = [r for r in rekordy if r["id"] in istniejace_id]
+
+      if do_dodania:
+        db.table("mecze").insert(do_dodania).execute()
+
+      for r in do_aktualizacji:
+        db.table("mecze").update(r).eq("id", r["id"]).execute()
 
       teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
           "%d.%m.%Y %H:%M:%S"
       )
-      db.table("ustawienia").upsert(
-          {"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa},
-          on_conflict="klucz",
-      ).execute()
+      
+      ust_res = db.table("ustawienia").select("klucz").eq("klucz", "ostatnia_synchro").execute()
+      if ust_res.data:
+          db.table("ustawienia").update({"wartosc": teraz_warszawa}).eq("klucz", "ostatnia_synchro").execute()
+      else:
+          db.table("ustawienia").insert({"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa}).execute()
+          
       return True
     except Exception as e:
       st.error(f"⚠️ SZCZEGÓŁY BŁĘDU BAZY: {str(e)}")
