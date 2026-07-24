@@ -132,20 +132,51 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
 
   rekordy = []
   for m in surowe_mecze:
-    fixture = m.get("fixture", {})
-    if not fixture or "id" not in fixture:
+    # Adaptacja klucza ID
+    mecz_id = m.get("id") or m.get("matchId")
+    if not mecz_id:
       continue
 
-    league = m.get("league", {})
-    teams = m.get("teams", {})
-    goals = m.get("goals", {})
+    # Zespoły
+    home_team = m.get("homeTeam", {})
+    away_team = m.get("awayTeam", {})
 
-    home_team = teams.get("home", {})
-    away_team = teams.get("away", {})
-    status_fixture = fixture.get("status", {})
+    # Wyciąganie wyników, obsługując różne warianty dostawców (płaskie / zagnieżdżone)
+    gole_h = m.get("homeScore")
+    if gole_h is None: 
+        gole_h = home_team.get("score")
+    if gole_h is None and isinstance(m.get("score"), dict): 
+        gole_h = m["score"].get("home")
 
-    gole_h = goals.get("home")
-    gole_a = goals.get("away")
+    gole_a = m.get("awayScore")
+    if gole_a is None: 
+        gole_a = away_team.get("score")
+    if gole_a is None and isinstance(m.get("score"), dict): 
+        gole_a = m["score"].get("away")
+
+    # Bezpieczna obsługa zagnieżdżeń (np. score: {"current": 2})
+    if isinstance(gole_h, dict): gole_h = gole_h.get("current", gole_h.get("display"))
+    if isinstance(gole_a, dict): gole_a = gole_a.get("current", gole_a.get("display"))
+
+    # Wyciąganie statusu i adaptacja do twardego "FT" lub "NS"
+    status_raw = m.get("status")
+    if isinstance(status_raw, dict):
+        status = str(status_raw.get("type") or status_raw.get("short") or "NS")
+    else:
+        status = str(status_raw or "NS")
+
+    if status.lower() in ["finished", "ended", "ft", "closed", "post_match"]:
+        status = "FT"
+    elif status.lower() in ["notstarted", "not_started", "ns", "upcoming"]:
+        status = "NS"
+
+    # Wyciąganie kolejki i daty
+    kolejka_raw = m.get("round")
+    if isinstance(kolejka_raw, dict):
+        kolejka_raw = kolejka_raw.get("round")
+    kolejka = str(kolejka_raw if kolejka_raw else "Kolejka 1")
+
+    data_meczu = str(m.get("date") or m.get("startTimestamp") or m.get("startTime") or "")
 
     try:
       gole_h_int = int(gole_h) if gole_h is not None else None
@@ -164,25 +195,25 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     )
 
     rekordy.append({
-        "id": int(fixture.get("id")),
-        "kolejka": str(league.get("round", "Kolejka 1")),
-        "data_meczu": str(fixture.get("date", "")),
+        "id": int(mecz_id),
+        "kolejka": kolejka,
+        "data_meczu": data_meczu,
         "gospodarze": str(home_team.get("name", "Gospodarz")),
         "goscie": str(away_team.get("name", "Gość")),
         "logo_gospodarze": str(home_team.get("logo", "")),
         "logo_goscie": str(away_team.get("logo", "")),
         "gole_gospodarze": gole_h_int,
         "gole_goscie": gole_a_int,
-        "status": str(status_fixture.get("short", "NS")),
+        "status": status,
         "wynik": wynik_str,
     })
 
   if not rekordy:
-    st.sidebar.error("⚠️ Nie wygenerowano żadnych rekordów z danych API.")
+    st.sidebar.error("⚠️ Parsowanie danych nie powiodło się.")
     return False
 
   try:
-    # 1. POBRANIE ISTNIEJĄCYCH
+    # 1. Pobranie istniejących
     try:
         res = db.table("mecze").select("id").execute()
         istniejace_id = [row["id"] for row in res.data] if res.data else []
@@ -193,7 +224,7 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     do_dodania = [r for r in rekordy if r["id"] not in istniejace_id]
     do_aktualizacji = [r for r in rekordy if r["id"] in istniejace_id]
 
-    # 2. WSTAWIANIE NOWYCH
+    # 2. Wstawienie nowych rekordów
     if do_dodania:
         try:
             db.table("mecze").insert(do_dodania).execute()
@@ -201,7 +232,7 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
             st.sidebar.error(f"❌ BŁĄD WSTAWIANIA (INSERT): {str(e)}")
             return False
 
-    # 3. AKTUALIZACJA STARYCH
+    # 3. Aktualizacja starych rekordów (np. wyniki)
     for r in do_aktualizacji:
         try:
             db.table("mecze").update(r).eq("id", r["id"]).execute()
@@ -209,7 +240,7 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
             st.sidebar.error(f"❌ BŁĄD AKTUALIZACJI (Mecz ID {r['id']}): {str(e)}")
             return False
 
-    # 4. AKTUALIZACJA CZASU SYNCHRONIZACJI
+    # 4. Odświeżenie ustawień z datą
     try:
         teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
             "%d.%m.%Y %H:%M:%S"
