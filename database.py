@@ -142,6 +142,7 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     home_team = m.get("homeTeam", {})
     away_team = m.get("awayTeam", {})
 
+    # Precyzyjne wyciąganie goli z Highlightly (obsługa różnych wariantów JSON)
     gole_h = m.get("homeScore")
     if gole_h is None:
       gole_h = home_team.get("score")
@@ -154,25 +155,30 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     if gole_a is None and isinstance(m.get("score"), dict):
       gole_a = m["score"].get("away")
 
+    # Jeśli gole to słownik (np. current/fulltime)
     if isinstance(gole_h, dict):
-      gole_h = gole_h.get("current", gole_h.get("display"))
+      gole_h = gole_h.get("current", gole_h.get("fulltime", gole_h.get("display")))
     if isinstance(gole_a, dict):
-      gole_a = gole_a.get("current", gole_a.get("display"))
+      gole_a = gole_a.get("current", gole_a.get("fulltime", gole_a.get("display")))
 
+    # Status meczu
     status_raw = m.get("status")
     if isinstance(status_raw, dict):
-      status = str(status_raw.get("type") or status_raw.get("short") or "NS")
+      status = str(status_raw.get("type") or status_raw.get("short") or status_raw.get("name") or "NS")
     else:
       status = str(status_raw or "NS")
 
-    if status.lower() in ["finished", "ended", "ft", "closed", "post_match"]:
+    status_lower = status.lower()
+    if any(s in status_lower for s in ["ft", "finished", "ended", "closed", "post"]):
       status = "FT"
-    elif status.lower() in ["notstarted", "not_started", "ns", "upcoming"]:
+    elif any(s in status_lower for s in ["ns", "not", "upcoming", "scheduled"]):
       status = "NS"
+    else:
+      status = "LIVE"  # w trakcie
 
     kolejka_raw = m.get("round")
     if isinstance(kolejka_raw, dict):
-      kolejka_raw = kolejka_raw.get("round")
+      kolejka_raw = kolejka_raw.get("round") or kolejka_raw.get("name")
     kolejka = str(kolejka_raw if kolejka_raw else "Kolejka 1")
 
     data_meczu = str(
@@ -226,7 +232,6 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     for r in do_aktualizacji:
       db.table("mecze").update(r).eq("id", r["id"]).execute()
 
-    # Bezpieczna próba zapisu daty synchro - ewentualny błąd RLS jest ignorowany
     try:
       teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
           "%d.%m.%Y %H:%M:%S"
