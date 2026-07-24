@@ -58,21 +58,9 @@ def wyznacz_aktualna_kolejke(wszystkie_mecze):
   return str(posortowane_nry[-1]) if posortowane_nry else "1"
 
 
-def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a, status_meczu):
-  # Akceptujemy wszystkie warianty oznaczenia zakończonego meczu
-  st_check = str(status_meczu).upper()
-  zakończony = any(
-      s in st_check
-      for s in ["FT", "FINISHED", "ENDED", "CLOSED", "POST", "AET", "PEN"]
-  )
-
-  # Jeśli wynik jest wpisany, również traktujemy go jako rozegrany
+def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a):
   if wynik_h is None or wynik_a is None:
     return 0, False
-
-  if not zakończony and status_meczu != "LIVE":
-    # Pozwala zliczać mecze, które fizycznie posiadają wpisany wynik
-    pass
 
   try:
     typ_h, typ_a = int(typ_h), int(typ_a)
@@ -127,7 +115,7 @@ def render_ranking(wszystkie_mecze):
     nick = t.get("gracz_nick")
     mecz_id = t.get("mecz_id")
 
-    # Dopasowanie nicku (obsluguje przypadki "Mateusz" vs "Mateusz Bielecki")
+    # Dopasowanie imienia/nicku
     dopasowany_nick = None
     if nick in statystyki:
       dopasowany_nick = nick
@@ -139,27 +127,36 @@ def render_ranking(wszystkie_mecze):
 
     if dopasowany_nick and mecz_id in mapa_meczow:
       mecz = mapa_meczow[mecz_id]
-      status = mecz.get("status", "")
+      
       gole_h = mecz.get("gole_gospodarze")
       gole_a = mecz.get("gole_goscie")
-      wynik_str = mecz.get("wynik", "")
+      wynik_str = str(mecz.get("wynik", ""))
 
-      if gole_h is not None and gole_a is not None and wynik_str != "- : -":
+      # Awaryjne wyciąganie goli z tekstu np. "2 - 1" jeśli kolumny int są puste
+      if (gole_h is None or gole_a is None) and ":" in wynik_str:
+        parts = wynik_str.split(":")
+        try:
+          gole_h = int(parts[0].strip())
+          gole_a = int(parts[1].strip())
+        except Exception:
+          pass
+
+      if gole_h is not None and gole_a is not None:
         pts, dokladny = oblicz_punkty_za_mecz(
             t.get("typ_gospodarze"),
             t.get("typ_goscie"),
             gole_h,
             gole_a,
-            status,
         )
 
-        statystyki[dopasowany_nick]["Punkty"] += pts
-        statystyki[dopasowany_nick]["Mecze"] += 1
+        if pts > 0:
+          statystyki[dopasowany_nick]["Punkty"] += pts
+          statystyki[dopasowany_nick]["Mecze"] += 1
 
-        if pts == 3:
-          statystyki[dopasowany_nick]["Dokładne"] += 1
-        elif pts == 1:
-          statystyki[dopasowany_nick]["Trafione"] += 1
+          if pts == 3:
+            statystyki[dopasowany_nick]["Dokładne"] += 1
+          elif pts == 1:
+            statystyki[dopasowany_nick]["Trafione"] += 1
 
   df = pd.DataFrame(list(statystyki.values()))
   df = df.sort_values(
