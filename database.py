@@ -112,14 +112,17 @@ def zapisz_typy_gracza(lista_typow):
     return True
   res = db.table("typy").select("gracz_nick, mecz_id").execute()
   istniejace = {(r["gracz_nick"], r["mecz_id"]) for r in res.data}
-  
+
   do_dodania = []
   for t in lista_typow:
     if (t["gracz_nick"], t["mecz_id"]) in istniejace:
-      db.table("typy").update({"typ_gospodarze": t["typ_gospodarze"], "typ_goscie": t["typ_goscie"]}).eq("gracz_nick", t["gracz_nick"]).eq("mecz_id", t["mecz_id"]).execute()
+      db.table("typy").update({
+          "typ_gospodarze": t["typ_gospodarze"],
+          "typ_goscie": t["typ_goscie"],
+      }).eq("gracz_nick", t["gracz_nick"]).eq("mecz_id", t["mecz_id"]).execute()
     else:
       do_dodania.append(t)
-      
+
   if do_dodania:
     db.table("typy").insert(do_dodania).execute()
   return True
@@ -132,51 +135,49 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
 
   rekordy = []
   for m in surowe_mecze:
-    # Adaptacja klucza ID
     mecz_id = m.get("id") or m.get("matchId")
     if not mecz_id:
       continue
 
-    # Zespoły
     home_team = m.get("homeTeam", {})
     away_team = m.get("awayTeam", {})
 
-    # Wyciąganie wyników, obsługując różne warianty dostawców (płaskie / zagnieżdżone)
     gole_h = m.get("homeScore")
-    if gole_h is None: 
-        gole_h = home_team.get("score")
-    if gole_h is None and isinstance(m.get("score"), dict): 
-        gole_h = m["score"].get("home")
+    if gole_h is None:
+      gole_h = home_team.get("score")
+    if gole_h is None and isinstance(m.get("score"), dict):
+      gole_h = m["score"].get("home")
 
     gole_a = m.get("awayScore")
-    if gole_a is None: 
-        gole_a = away_team.get("score")
-    if gole_a is None and isinstance(m.get("score"), dict): 
-        gole_a = m["score"].get("away")
+    if gole_a is None:
+      gole_a = away_team.get("score")
+    if gole_a is None and isinstance(m.get("score"), dict):
+      gole_a = m["score"].get("away")
 
-    # Bezpieczna obsługa zagnieżdżeń (np. score: {"current": 2})
-    if isinstance(gole_h, dict): gole_h = gole_h.get("current", gole_h.get("display"))
-    if isinstance(gole_a, dict): gole_a = gole_a.get("current", gole_a.get("display"))
+    if isinstance(gole_h, dict):
+      gole_h = gole_h.get("current", gole_h.get("display"))
+    if isinstance(gole_a, dict):
+      gole_a = gole_a.get("current", gole_a.get("display"))
 
-    # Wyciąganie statusu i adaptacja do twardego "FT" lub "NS"
     status_raw = m.get("status")
     if isinstance(status_raw, dict):
-        status = str(status_raw.get("type") or status_raw.get("short") or "NS")
+      status = str(status_raw.get("type") or status_raw.get("short") or "NS")
     else:
-        status = str(status_raw or "NS")
+      status = str(status_raw or "NS")
 
     if status.lower() in ["finished", "ended", "ft", "closed", "post_match"]:
-        status = "FT"
+      status = "FT"
     elif status.lower() in ["notstarted", "not_started", "ns", "upcoming"]:
-        status = "NS"
+      status = "NS"
 
-    # Wyciąganie kolejki i daty
     kolejka_raw = m.get("round")
     if isinstance(kolejka_raw, dict):
-        kolejka_raw = kolejka_raw.get("round")
+      kolejka_raw = kolejka_raw.get("round")
     kolejka = str(kolejka_raw if kolejka_raw else "Kolejka 1")
 
-    data_meczu = str(m.get("date") or m.get("startTimestamp") or m.get("startTime") or "")
+    data_meczu = str(
+        m.get("date") or m.get("startTimestamp") or m.get("startTime") or ""
+    )
 
     try:
       gole_h_int = int(gole_h) if gole_h is not None else None
@@ -213,45 +214,39 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     return False
 
   try:
-    # 1. Pobranie istniejących
-    try:
-        res = db.table("mecze").select("id").execute()
-        istniejace_id = [row["id"] for row in res.data] if res.data else []
-    except Exception as e:
-        st.sidebar.error(f"❌ BŁĄD POBIERANIA Z SUPABASE: {str(e)}")
-        return False
+    res = db.table("mecze").select("id").execute()
+    istniejace_id = [row["id"] for row in res.data] if res.data else []
 
     do_dodania = [r for r in rekordy if r["id"] not in istniejace_id]
     do_aktualizacji = [r for r in rekordy if r["id"] in istniejace_id]
 
-    # 2. Wstawienie nowych rekordów
     if do_dodania:
-        try:
-            db.table("mecze").insert(do_dodania).execute()
-        except Exception as e:
-            st.sidebar.error(f"❌ BŁĄD WSTAWIANIA (INSERT): {str(e)}")
-            return False
+      db.table("mecze").insert(do_dodania).execute()
 
-    # 3. Aktualizacja starych rekordów (np. wyniki)
     for r in do_aktualizacji:
-        try:
-            db.table("mecze").update(r).eq("id", r["id"]).execute()
-        except Exception as e:
-            st.sidebar.error(f"❌ BŁĄD AKTUALIZACJI (Mecz ID {r['id']}): {str(e)}")
-            return False
+      db.table("mecze").update(r).eq("id", r["id"]).execute()
 
-    # 4. Odświeżenie ustawień z datą
+    # Bezpieczna próba zapisu daty synchro - ewentualny błąd RLS jest ignorowany
     try:
-        teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
-            "%d.%m.%Y %H:%M:%S"
-        )
-        ust_res = db.table("ustawienia").select("klucz").eq("klucz", "ostatnia_synchro").execute()
-        if ust_res.data:
-            db.table("ustawienia").update({"wartosc": teraz_warszawa}).eq("klucz", "ostatnia_synchro").execute()
-        else:
-            db.table("ustawienia").insert({"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa}).execute()
-    except Exception as e:
-        st.sidebar.error(f"❌ BŁĄD ZAPISU DATY SYNCHRONIZACJI: {str(e)}")
+      teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
+          "%d.%m.%Y %H:%M:%S"
+      )
+      ust_res = (
+          db.table("ustawienia")
+          .select("klucz")
+          .eq("klucz", "ostatnia_synchro")
+          .execute()
+      )
+      if ust_res.data:
+        db.table("ustawienia").update({"wartosc": teraz_warszawa}).eq(
+            "klucz", "ostatnia_synchro"
+        ).execute()
+      else:
+        db.table("ustawienia").insert(
+            {"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa}
+        ).execute()
+    except Exception:
+      pass
 
     return True
 
