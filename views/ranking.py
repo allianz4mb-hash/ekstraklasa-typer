@@ -127,7 +127,12 @@ def render_ranking(wszystkie_mecze):
 
     if dopasowany_nick and mecz_id in mapa_meczow:
       mecz = mapa_meczow[mecz_id]
-      
+
+      # BLOKADA: Liczymy punkty TYLKO dla meczów o statusie 'FT' (Finished)
+      status_meczu = str(mecz.get("status", "")).upper()
+      if status_meczu != "FT":
+        continue
+
       gole_h = mecz.get("gole_gospodarze")
       gole_a = mecz.get("gole_goscie")
       wynik_str = str(mecz.get("wynik", ""))
@@ -289,7 +294,12 @@ def render_ranking(wszystkie_mecze):
 }
 </style>"""
 
-  tv_header_html = f'<div class="tv-header"><div><div class="tv-logo-sub">PKO BANK POLSKI</div><div class="tv-logo-title">⚽ EKSTRAKLAPA</div></div><div class="tv-round-badge">{aktualna_kolejka_nr}. KOLEJKA</div></div>'
+  tv_header_html = (
+      f'<div class="tv-header"><div><div class="tv-logo-sub">PKO BANK'
+      ' POLSKI</div><div class="tv-logo-title">⚽'
+      f' EKSTRAKLAPA</div></div><div class="tv-round-badge">{aktualna_kolejka_nr}.'
+      " KOLEJKA</div></div>"
+  )
 
   html_rows = []
   for idx, row in df.iterrows():
@@ -316,11 +326,30 @@ def render_ranking(wszystkie_mecze):
     else:
       klasa_pos = "pos-srodek"
 
-    row_html = f'<tr class="ekstraklasa-row {klasa_pos}"><td class="cell-pos">{miejsce}</td><td class="cell-logo">{logo_img}</td><td class="cell-nick">{nick}</td><td class="cell-pts">{pts}</td><td class="cell-stat">{dok}</td><td class="cell-stat">{traf}</td><td class="cell-stat-last">{mcz}</td></tr>'
+    row_html = (
+        f'<tr class="ekstraklasa-row {klasa_pos}"><td'
+        f' class="cell-pos">{miejsce}</td><td'
+        f' class="cell-logo">{logo_img}</td><td'
+        f' class="cell-nick">{nick}</td><td class="cell-pts">{pts}</td><td'
+        f' class="cell-stat">{dok}</td><td class="cell-stat">{traf}</td><td'
+        f' class="cell-stat-last">{mcz}</td></tr>'
+    )
     html_rows.append(row_html)
 
   rows_combined = "".join(html_rows)
 
-  full_html = f'{css_style}<div class="ekstraklasa-container">{tv_header_html}<table class="ekstraklasa-table"><thead><tr><th class="ekstraklasa-header" style="text-align:center;">#</th><th class="ekstraklasa-header" style="text-align:center;">KLUB</th><th class="ekstraklasa-header" style="text-align:left; padding-left:8px;">GRACZ</th><th class="ekstraklasa-header" style="text-align:center;">PKT</th><th class="ekstraklasa-header" style="text-align:center;">3PKT</th><th class="ekstraklasa-header" style="text-align:center;">1PKT</th><th class="ekstraklasa-header" style="text-align:center;">MECZE</th></tr></thead><tbody>{rows_combined}</tbody></table></div>'
+  full_html = (
+      f"{css_style}<div"
+      f' class="ekstraklasa-container">{tv_header_html}<table'
+      ' class="ekstraklasa-table"><thead><tr><th class="ekstraklasa-header"'
+      ' style="text-align:center;">#</th><th class="ekstraklasa-header"'
+      ' style="text-align:center;">KLUB</th><th class="ekstraklasa-header"'
+      ' style="text-align:left; padding-left:8px;">GRACZ</th><th'
+      ' class="ekstraklasa-header" style="text-align:center;">PKT</th><th'
+      ' class="ekstraklasa-header" style="text-align:center;">3PKT</th><th'
+      ' class="ekstraklasa-header" style="text-align:center;">1PKT</th><th'
+      ' class="ekstraklasa-header"'
+      f' style="text-align:center;">MECZE</th></tr></thead><tbody>{rows_combined}</tbody></table></div>'
+  )
 
   st.markdown(full_html, unsafe_allow_html=True)
