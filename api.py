@@ -9,19 +9,8 @@ def get_headers():
   return {"x-rapidapi-key": api_key}
 
 
-@st.cache_data(ttl=3600)
 def pobierz_ligę_ekstraklasa():
-  url = f"{BASE_URL}/leagues"
-  params = {"countryName": "Poland", "leagueName": "Ekstraklasa"}
-  try:
-    response = requests.get(url, headers=get_headers(), params=params)
-    if response.status_code == 200:
-      data = response.json().get("data", [])
-      if data:
-        return data[0]
-  except Exception:
-    pass
-
+  # Szybki powrót bez marnowania zapytań API
   return {
       "id": 90990,
       "name": "Ekstraklasa",
@@ -35,7 +24,8 @@ def pobierz_ligę_ekstraklasa():
   }
 
 
-def pobierz_mecze_ekstraklasy(league_id: int, season: int):
+@st.cache_data(ttl=300, show_spinner=False)
+def pobierz_mecze_ekstraklasy(league_id: int = 90990, season: int = 2026):
   api_key = st.secrets.get("HIGHLIGHTLY_API_KEY", "").strip()
 
   if not api_key:
