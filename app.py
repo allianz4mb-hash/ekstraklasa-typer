@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import api
 import database
 import streamlit as st
@@ -13,19 +15,30 @@ st.set_page_config(
 
 
 # --- AUTOMATYCZNA SYNCHRONIZACJA W TLE (MAX RAZ NA 30 MINUT) ---
-@st.cache_data(ttl=1800, show_spinner=False)
 def automatyczna_synchronizacja():
-  try:
-    liga_info = api.pobierz_ligę_ekstraklasa()
-    if liga_info:
-      seasons = liga_info.get("seasons", [])
-      current_season = max([s["season"] for s in seasons]) if seasons else 2026
-      league_id = liga_info.get("id")
-      surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
+  czas_str = database.pobierz_czas_synchro()
+  wykonaj = False
+
+  if czas_str == "Brak danych":
+    wykonaj = True
+  else:
+    try:
+      ostatnia = datetime.strptime(czas_str, "%d.%m.%Y %H:%M:%S").replace(
+          tzinfo=ZoneInfo("Europe/Warsaw")
+      )
+      teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
+      if teraz - ostatnia >= timedelta(minutes=30):
+        wykonaj = True
+    except Exception:
+      wykonaj = True
+
+  if wykonaj:
+    try:
+      surowe_mecze = api.pobierz_mecze_ekstraklasy(90990, 2026)
       if surowe_mecze:
         database.synchronizuj_mecze_wsadowo(surowe_mecze)
-  except Exception:
-    pass
+    except Exception:
+      pass
 
 
 automatyczna_synchronizacja()
@@ -154,35 +167,29 @@ else:
 
 wybrany_gracz = st.session_state["zalogowany_gracz"]
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("⚙️ Zarządzanie ligą")
+# --- ZARZĄDZANIE LIGĄ WIDOCZNE TYLKO DLA "Mateusz" ---
+if wybrany_gracz == "Mateusz":
+  st.sidebar.markdown("---")
+  st.sidebar.subheader("⚙️ Zarządzanie ligą")
 
-if st.sidebar.button("🔄 Wymuś synchronizację z API", use_container_width=True):
-  st.cache_data.clear()
-  with st.spinner("Pobieranie terminarza Ekstraklasy..."):
-    liga_info = api.pobierz_ligę_ekstraklasa()
-
-    if liga_info:
-      seasons = liga_info.get("seasons", [])
-      current_season = (
-          max([s["season"] for s in seasons]) if seasons else 2026
-      )
-      league_id = liga_info.get("id")
-
-      surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
+  if st.sidebar.button(
+      "🔄 Wymuś synchronizację z API", use_container_width=True
+  ):
+    st.cache_data.clear()
+    with st.spinner("Pobieranie terminarza Ekstraklasy..."):
+      surowe_mecze = api.pobierz_mecze_ekstraklasy(90990, 2026)
 
       if surowe_mecze:
         sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
         if sukces:
-          st.sidebar.success("Zsynchronizowano mecze i herby pomyślnie!")
+          st.sidebar.success("Zsynchronizowano mecze pomyślnie!")
           st.rerun()
         else:
           st.sidebar.error("Błąd zapisu meczów do bazy.")
       else:
         st.sidebar.warning("API zwróciło pustą listę meczów.")
-    else:
-      st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
 
+st.sidebar.markdown("---")
 czas_synchro = database.pobierz_czas_synchro()
 st.sidebar.caption(f"⏱️ **Ostatnia synchro:** {czas_synchro}")
 
