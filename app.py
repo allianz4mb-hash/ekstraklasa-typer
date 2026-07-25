@@ -1,211 +1,56 @@
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import api
 import database
 import streamlit as st
-from views.matryca import render_matryca
-from views.profil import render_profil
-from views.ranking import render_ranking
-from views.regulamin import render_regulamin
-from views.typowanie import render_typowanie
 
-st.set_page_config(
-    page_title="Ekstraklasa Typer", page_icon="⚽", layout="wide"
+
+# --- AUTOMATYCZNA SYNCHRONIZACJA (CO MAX 30 MINUT) ---
+def auto_synchronizacja_check():
+  czas_str = database.pobierz_czas_synchro()
+  wykonaj_synchro = False
+
+  if czas_str == "Brak danych":
+    wykonaj_synchro = True
+  else:
+    try:
+      ostatnia = datetime.strptime(czas_str, "%d.%m.%Y %H:%M:%S").replace(
+          tzinfo=ZoneInfo("Europe/Warsaw")
+      )
+      teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
+
+      # Jeśli od ostatniej synchro minęło 30 minut lub więcej
+      if teraz - ostatnia >= timedelta(minutes=30):
+        wykonaj_synchro = True
+    except Exception:
+      wykonaj_synchro = True
+
+  if wykonaj_synchro:
+    surowe = api.pobierz_mecze_ekstraklasy()
+    if surowe:
+      database.synchronizuj_mecze_wsadowo(surowe)
+
+
+# Wywołujemy automatyczną kontrolę przy każdym wejściu gracza lub bota
+auto_synchronizacja_check()
+
+# --- DALSZA CZĘŚĆ LOGIKI PANELU BOCZNEGO ---
+# Przyjmijmy, że wybrany_gracz to zmienna z selectboxa/zalogowanego użytkownika
+wybrany_gracz = st.sidebar.selectbox(
+    "Wybierz gracza:", database.pobierz_liste_graczy()
 )
 
+# --- PANEL ZARZĄDZANIA WIDOCZNY TYLKO DLA NICKU "Mateusz" ---
+if wybrany_gracz == "Mateusz":
+  st.sidebar.markdown("---")
+  st.sidebar.subheader("⚙️ Zarządzanie ligą (Admin)")
 
-# --- AUTOMATYCZNA SYNCHRONIZACJA W TLE (MAX RAZ NA 30 MINUT) ---
-@st.cache_data(ttl=1800, show_spinner=False)
-def automatyczna_synchronizacja():
-  try:
-    liga_info = api.pobierz_ligę_ekstraklasa()
-    if liga_info:
-      seasons = liga_info.get("seasons", [])
-      current_season = max([s["season"] for s in seasons]) if seasons else 2026
-      league_id = liga_info.get("id")
-      surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
-      if surowe_mecze:
-        database.synchronizuj_mecze_wsadowo(surowe_mecze)
-  except Exception:
-    pass
+  if st.sidebar.button("🔄 Wymuś synchronizację z API"):
+    surowe = api.pobierz_mecze_ekstraklasy()
+    if database.synchronizuj_mecze_wsadowo(surowe):
+      st.sidebar.success("Zsynchronizowano pomyślnie!")
+      st.rerun()
 
-
-automatyczna_synchronizacja()
-
-try:
-  res_mecze = (
-      database.db.table("mecze")
-      .select("*")
-      .order("data_meczu", desc=False)
-      .execute()
-  )
-  wszystkie_mecze = res_mecze.data
-except Exception:
-  wszystkie_mecze = []
-
-kluby_mapa = database.pobierz_mapa_klubow_logo(wszystkie_mecze)
-lista_klubow = ["— Brak —"] + sorted(list(kluby_mapa.keys()))
-
-if "zalogowany_gracz" not in st.session_state:
-  st.session_state["zalogowany_gracz"] = None
-
-
-# --- PROFESJONALNY BANER TELEWIZYJNY EKSTRAKLAPA ---
-def renderuj_naglowek_logo():
-  html_code = """
-    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 25px; padding: 15px; background: linear-gradient(135deg, #0b0e14 0%, #161b22 100%); border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.4); border-bottom: 3px solid #00f2ff;">
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <div style="background: #ffffff; border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,242,255,0.3);">
-                <span style="font-size: 24px;">⚽</span>
-            </div>
-            <div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; color: #8f9bba; letter-spacing: 3px; text-transform: uppercase;">PKO Bank Polski</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 32px; font-weight: 900; color: #ffffff; letter-spacing: 4px; text-transform: uppercase; line-height: 1.1;">
-                    EKSTRAKLAPA
-                </div>
-            </div>
-        </div>
-        <div style="margin-top: 10px; background: linear-gradient(135deg, #0052cc 0%, #00f2ff 100%); color: #ffffff; padding: 4px 16px; border-radius: 20px; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; box-shadow: 0 3px 10px rgba(0,242,255,0.4);">
-            TYPER 2026/27
-        </div>
-    </div>
-    """
-  st.markdown(html_code, unsafe_allow_html=True)
-
-
-renderuj_naglowek_logo()
-
-
-# --- PANEL BOCZNY ---
-st.sidebar.header("👤 Panel Gracza")
-
-dostepni_gracze = database.pobierz_liste_graczy()
-
-if not st.session_state["zalogowany_gracz"]:
-  tab_login, tab_register = st.sidebar.tabs(["🔑 Logowanie", "📝 Rejestracja"])
-
-  with tab_login:
-    if dostepni_gracze:
-      wybrany_gracz_do_logowania = st.selectbox(
-          "Wybierz gracza:", dostepni_gracze, key="login_select"
-      )
-      wpisany_pin = st.text_input(
-          "Wpisz 4-cyfrowy PIN:",
-          type="password",
-          max_chars=4,
-          key="login_pin",
-      )
-
-      if st.button("🔑 Zaloguj się", use_container_width=True):
-        if database.weryfikuj_pin_gracza(
-            wybrany_gracz_do_logowania, wpisany_pin
-        ):
-          st.session_state["zalogowany_gracz"] = wybrany_gracz_do_logowania
-          st.success("Zalogowano pomyślnie!")
-          st.rerun()
-        else:
-          st.error("❌ Nieprawidłowy PIN!")
-    else:
-      st.info("Brak graczy w bazie. Zarejestruj się obok!")
-
-  with tab_register:
-    nowy_nick = st.text_input("Nick / Imię:", key="reg_nick")
-    wybrany_klub = st.selectbox(
-        "Ulubiony klub:", lista_klubow, key="reg_klub"
-    )
-    nowy_pin = st.text_input(
-        "Ustal 4-cyfrowy PIN:",
-        type="password",
-        max_chars=4,
-        key="reg_pin",
-        help="PIN musi składać się z 4 cyfr",
-    )
-    powtorz_pin = st.text_input(
-        "Powtórz 4-cyfrowy PIN:",
-        type="password",
-        max_chars=4,
-        key="reg_pin_repeat",
-    )
-
-    if st.button("✨ Zarejestruj się", use_container_width=True):
-      if not nowy_nick.strip():
-        st.error("Podaj swój nick!")
-      elif not nowy_pin.strip():
-        st.error("Ustal PIN!")
-      elif nowy_pin != powtorz_pin:
-        st.error("Wpisane PIN-y nie są identyczne!")
-      else:
-        klub_val = "" if wybrany_klub == "— Brak —" else wybrany_klub
-        sukces, komunikat = database.zarejestruj_gracza(
-            nowy_nick, nowy_pin, klub_val
-        )
-        if sukces:
-          st.success(komunikat)
-          st.session_state["zalogowany_gracz"] = nowy_nick.strip()
-          st.rerun()
-        else:
-          st.error(komunikat)
-
-else:
-  wybrany_gracz = st.session_state["zalogowany_gracz"]
-  st.sidebar.success(f"Zalogowany jako: **{wybrany_gracz}**")
-
-  if st.sidebar.button("🚪 Wyloguj się", use_container_width=True):
-    st.session_state["zalogowany_gracz"] = None
-    st.rerun()
-
-wybrany_gracz = st.session_state["zalogowany_gracz"]
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("⚙️ Zarządzanie ligą")
-
-if st.sidebar.button("🔄 Wymuś synchronizację z API", use_container_width=True):
-  st.cache_data.clear()
-  with st.spinner("Pobieranie terminarza Ekstraklasy..."):
-    liga_info = api.pobierz_ligę_ekstraklasa()
-
-    if liga_info:
-      seasons = liga_info.get("seasons", [])
-      current_season = (
-          max([s["season"] for s in seasons]) if seasons else 2026
-      )
-      league_id = liga_info.get("id")
-
-      surowe_mecze = api.pobierz_mecze_ekstraklasy(league_id, current_season)
-
-      if surowe_mecze:
-        sukces = database.synchronizuj_mecze_wsadowo(surowe_mecze)
-        if sukces:
-          st.sidebar.success("Zsynchronizowano mecze i herby pomyślnie!")
-          st.rerun()
-        else:
-          st.sidebar.error("Błąd zapisu meczów do bazy.")
-      else:
-        st.sidebar.warning("API zwróciło pustą listę meczów.")
-    else:
-      st.sidebar.error("Nie udało się odnaleźć polskiej Ekstraklasy w API.")
-
-czas_synchro = database.pobierz_czas_synchro()
-st.sidebar.caption(f"⏱️ **Ostatnia synchro:** {czas_synchro}")
-
-# --- WCHODZENIE W ZAKŁADKI ---
-tab_typowanie, tab_ranking, tab_matryca, tab_profil, tab_regulamin = st.tabs([
-    "🎯 Formularz Typowania",
-    "🏆 Tabela / Ranking",
-    "👁️ Podgląd Typów",
-    "⚙️ Profil",
-    "📜 Regulamin",
-])
-
-with tab_typowanie:
-  render_typowanie(wszystkie_mecze, wybrany_gracz)
-
-with tab_ranking:
-  render_ranking(wszystkie_mecze)
-
-with tab_matryca:
-  render_matryca(wszystkie_mecze, wybrany_gracz)
-
-with tab_profil:
-  render_profil(wybrany_gracz, wszystkie_mecze)
-
-with tab_regulamin:
-  render_regulamin()
+st.sidebar.caption(
+    f"⏱️ Ostatnia synchro: {database.pobierz_czas_synchro()}"
+)
