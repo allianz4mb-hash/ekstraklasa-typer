@@ -135,65 +135,46 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
 
   rekordy = []
   for m in surowe_mecze:
-    mecz_id = m.get("id") or m.get("matchId")
+    mecz_id = m.get("id")
     if not mecz_id:
       continue
+
+    mecz_id_int = int(mecz_id)
 
     home_team = m.get("homeTeam", {})
     away_team = m.get("awayTeam", {})
 
-    # Precyzyjne wyciąganie goli z Highlightly (obsługa różnych wariantów JSON)
-    gole_h = m.get("homeScore")
-    if gole_h is None:
-      gole_h = home_team.get("score")
-    if gole_h is None and isinstance(m.get("score"), dict):
-      gole_h = m["score"].get("home")
+    # DOPASOWANIE DO DOKUMENTACJI HIGHLIGHTLY:
+    # state -> score -> current (np. "3 - 1")
+    state_obj = m.get("state", {})
+    status_desc = str(state_obj.get("description", "Not started"))
 
-    gole_a = m.get("awayScore")
-    if gole_a is None:
-      gole_a = away_team.get("score")
-    if gole_a is None and isinstance(m.get("score"), dict):
-      gole_a = m["score"].get("away")
+    score_obj = state_obj.get("score", {}) if isinstance(state_obj, dict) else {}
+    score_current = score_obj.get("current") if isinstance(score_obj, dict) else None
 
-    # Jeśli gole to słownik (np. current/fulltime)
-    if isinstance(gole_h, dict):
-      gole_h = gole_h.get("current", gole_h.get("fulltime", gole_h.get("display")))
-    if isinstance(gole_a, dict):
-      gole_a = gole_a.get("current", gole_a.get("fulltime", gole_a.get("display")))
+    gole_h_int = None
+    gole_a_int = None
 
-    # Status meczu
-    status_raw = m.get("status")
-    if isinstance(status_raw, dict):
-      status = str(status_raw.get("type") or status_raw.get("short") or status_raw.get("name") or "NS")
-    else:
-      status = str(status_raw or "NS")
+    if score_current and "-" in str(score_current):
+      parts = str(score_current).split("-")
+      try:
+        gole_h_int = int(parts[0].strip())
+        gole_a_int = int(parts[1].strip())
+      except (ValueError, TypeError):
+        gole_h_int = None
+        gole_a_int = None
 
-    status_lower = status.lower()
-    if any(s in status_lower for s in ["ft", "finished", "ended", "closed", "post"]):
+    # Mapowanie statusu na nasze oznaczenia (FT / NS / LIVE)
+    status_lower = status_desc.lower()
+    if any(s in status_lower for s in ["finished", "ended", "awarded"]):
       status = "FT"
-    elif any(s in status_lower for s in ["ns", "not", "upcoming", "scheduled"]):
-      status = "NS"
+    elif any(s in status_lower for s in ["half", "progress", "extra", "penalties", "break"]):
+      status = "LIVE"
     else:
-      status = "LIVE"  # w trakcie
+      status = "NS"
 
-    kolejka_raw = m.get("round")
-    if isinstance(kolejka_raw, dict):
-      kolejka_raw = kolejka_raw.get("round") or kolejka_raw.get("name")
-    kolejka = str(kolejka_raw if kolejka_raw else "Kolejka 1")
-
-    data_meczu = str(
-        m.get("date") or m.get("startTimestamp") or m.get("startTime") or ""
-    )
-
-    try:
-      gole_h_int = int(gole_h) if gole_h is not None else None
-    except (TypeError, ValueError):
-      gole_h_int = None
-
-    try:
-      gole_a_int = int(gole_a) if gole_a is not None else None
-    except (TypeError, ValueError):
-      gole_a_int = None
+    kolejka = str(m.get("round", "Kolejka 1"))
+    data_meczu = str(m.get("date", ""))
 
     wynik_str = (
         f"{gole_h_int} : {gole_a_int}"
@@ -202,7 +183,7 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     )
 
     rekordy.append({
-        "id": int(mecz_id),
+        "id": mecz_id_int,
         "kolejka": kolejka,
         "data_meczu": data_meczu,
         "gospodarze": str(home_team.get("name", "Gospodarz")),
