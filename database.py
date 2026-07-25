@@ -144,13 +144,15 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     home_team = m.get("homeTeam", {})
     away_team = m.get("awayTeam", {})
 
-    # DOPASOWANIE DO DOKUMENTACJI HIGHLIGHTLY:
-    # state -> score -> current (np. "3 - 1")
     state_obj = m.get("state", {})
     status_desc = str(state_obj.get("description", "Not started"))
 
-    score_obj = state_obj.get("score", {}) if isinstance(state_obj, dict) else {}
-    score_current = score_obj.get("current") if isinstance(score_obj, dict) else None
+    score_obj = (
+        state_obj.get("score", {}) if isinstance(state_obj, dict) else {}
+    )
+    score_current = (
+        score_obj.get("current") if isinstance(score_obj, dict) else None
+    )
 
     gole_h_int = None
     gole_a_int = None
@@ -164,11 +166,13 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
         gole_h_int = None
         gole_a_int = None
 
-    # Mapowanie statusu na nasze oznaczenia (FT / NS / LIVE)
     status_lower = status_desc.lower()
     if any(s in status_lower for s in ["finished", "ended", "awarded"]):
       status = "FT"
-    elif any(s in status_lower for s in ["half", "progress", "extra", "penalties", "break"]):
+    elif any(
+        s in status_lower
+        for s in ["half", "progress", "extra", "penalties", "break"]
+    ):
       status = "LIVE"
     else:
       status = "NS"
@@ -201,36 +205,16 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     return False
 
   try:
-    res = db.table("mecze").select("id").execute()
-    istniejace_id = [row["id"] for row in res.data] if res.data else []
-
-    do_dodania = [r for r in rekordy if r["id"] not in istniejace_id]
-    do_aktualizacji = [r for r in rekordy if r["id"] in istniejace_id]
-
-    if do_dodania:
-      db.table("mecze").insert(do_dodania).execute()
-
-    for r in do_aktualizacji:
-      db.table("mecze").update(r).eq("id", r["id"]).execute()
+    # SUPABASE UPSERT: Błyskawiczna wysyłka całej paczki meczów w 1 zapytaniu
+    db.table("mecze").upsert(rekordy).execute()
 
     try:
       teraz_warszawa = datetime.now(ZoneInfo("Europe/Warsaw")).strftime(
           "%d.%m.%Y %H:%M:%S"
       )
-      ust_res = (
-          db.table("ustawienia")
-          .select("klucz")
-          .eq("klucz", "ostatnia_synchro")
-          .execute()
-      )
-      if ust_res.data:
-        db.table("ustawienia").update({"wartosc": teraz_warszawa}).eq(
-            "klucz", "ostatnia_synchro"
-        ).execute()
-      else:
-        db.table("ustawienia").insert(
-            {"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa}
-        ).execute()
+      db.table("ustawienia").upsert(
+          {"klucz": "ostatnia_synchro", "wartosc": teraz_warszawa}
+      ).execute()
     except Exception:
       pass
 
