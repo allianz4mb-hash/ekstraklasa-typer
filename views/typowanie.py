@@ -2,63 +2,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import database
 import streamlit as st
-
-
-def wyciagnij_nr_kolejki(kolejka_raw):
-  if not kolejka_raw:
-    return 0
-  if "-" in str(kolejka_raw):
-    parts = str(kolejka_raw).split("-")
-    nr = parts[-1].strip()
-    if nr.isdigit():
-      return int(nr)
-  if str(kolejka_raw).isdigit():
-    return int(kolejka_raw)
-  return 999
-
-
-def formatuj_nazwe_kolejki(kolejka_raw):
-  nr = wyciagnij_nr_kolejki(kolejka_raw)
-  if nr != 999 and nr != 0:
-    return f"{nr}. Kolejka PKO BP Ekstraklapy"
-  return str(kolejka_raw)
-
-
-def daj_klimatyczny_naglowek(data_iso_str):
-  try:
-    if data_iso_str.endswith("Z"):
-      data_iso_str = data_iso_str[:-1] + "+00:00"
-
-    dt = datetime.fromisoformat(data_iso_str).astimezone(
-        ZoneInfo("Europe/Warsaw")
-    )
-    dzien_tygodnia = dt.weekday()
-    data_ladna = dt.strftime("%d.%m.%Y")
-
-    slogany = {
-        4: f"🔥 Super Piątek — {data_ladna}",
-        5: f"⚡ Gorączka Piłkarskiej Soboty — {data_ladna}",
-        6: f"⚽ Grana Niedziela — {data_ladna}",
-        0: f"🌙 Poniedziałkowa Ekstraklasa po godzinach — {data_ladna}",
-        1: f"⚽ Piłkarski Wtorek — {data_ladna}",
-        2: f"⚽ Meczowa Środa — {data_ladna}",
-        3: f"⚽ Czwartek z Ekstraklasą — {data_ladna}",
-    }
-    return slogany.get(dzien_tygodnia, f"📅 {data_ladna}"), dt
-  except Exception:
-    return data_iso_str, None
-
-
-def formatuj_godzine(data_iso_str):
-  try:
-    if data_iso_str.endswith("Z"):
-      data_iso_str = data_iso_str[:-1] + "+00:00"
-    dt = datetime.fromisoformat(data_iso_str).astimezone(
-        ZoneInfo("Europe/Warsaw")
-    )
-    return dt.strftime("godz. %H:%M")
-  except Exception:
-    return ""
+import utils
 
 
 def render_typowanie(wszystkie_mecze, zalogowany_gracz):
@@ -72,13 +16,23 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
     return
 
   surowe_kolejki = list(set(m.get("kolejka", "1") for m in wszystkie_mecze))
-  surowe_kolejki = sorted(surowe_kolejki, key=wyciagnij_nr_kolejki)
+  surowe_kolejki = sorted(surowe_kolejki, key=utils.wyciagnij_numer_kolejki)
 
-  mapa_kolejek = {k: formatuj_nazwe_kolejki(k) for k in surowe_kolejki}
+  mapa_kolejek = {k: utils.formatuj_nazwe_kolejki(k) for k in surowe_kolejki}
+
+  # AUTOMATYCZNY WYBÓR AKTUALNEJ KOLEJKI
+  aktualna_kolejka_nr = utils.wyznacz_aktualna_kolejke(wszystkie_mecze)
+
+  domyslny_idx = 0
+  for idx, k_raw in enumerate(surowe_kolejki):
+    if str(utils.wyciagnij_numer_kolejki(k_raw)) == str(aktualna_kolejka_nr):
+      domyslny_idx = idx
+      break
 
   wybrana_kolejka_raw = st.selectbox(
       "Wybierz kolejkę do wytypowania:",
       options=surowe_kolejki,
+      index=domyslny_idx,
       format_func=lambda x: mapa_kolejek[x],
   )
 
@@ -92,7 +46,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
 
   pogrupowane_mecze = {}
   for mecz in mecze_kolejki:
-    naglowek, dt = daj_klimatyczny_naglowek(mecz.get("data_meczu", ""))
+    naglowek, dt = utils.daj_klimatyczny_naglowek(mecz.get("data_meczu", ""))
     if naglowek not in pogrupowane_mecze:
       pogrupowane_mecze[naglowek] = []
     pogrupowane_mecze[naglowek].append(mecz)
@@ -113,7 +67,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
         logo_h = mecz.get("logo_gospodarze", "")
         logo_a = mecz.get("logo_goscie", "")
         data_meczu = mecz.get("data_meczu", "")
-        godzina_str = formatuj_godzine(data_meczu)
+        godzina_str = utils.formatuj_godzine(data_meczu)
         status_meczu = str(mecz.get("status", "")).upper()
 
         mecz_przelozony = status_meczu == "PPD"
@@ -148,7 +102,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
           else:
             badge_html = (
                 f"<div style='text-align: right; color: #2e7d32; font-weight:"
-                f" bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a})</div>"
+                f" bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a}</div>"
             )
         else:
           domyslne_h, domyslne_a = 0, 0
