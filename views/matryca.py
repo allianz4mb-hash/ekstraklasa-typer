@@ -54,14 +54,20 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     mecz_nazwa = f"{mecz['gospodarze']} - {mecz['goscie']}"
     status_meczu = str(mecz.get("status", "")).upper()
 
-    if status_meczu == "PPD":
+    mecz_przelozony = status_meczu == "PPD"
+
+    if mecz_przelozony:
       wynik_real = "Przełożony"
     else:
       wynik_real = mecz.get("wynik") or "- : -"
 
-    zablokowany = utils.czy_mecz_zablokowany(
-        mecz.get("data_meczu"), mecz.get("status")
-    )
+    # Mecz przełożony traktujemy jak NIEZABLOKOWANY (odsłaniamy tylko gdy mecz wystartuje)
+    if mecz_przelozony:
+      zablokowany = False
+    else:
+      zablokowany = utils.czy_mecz_zablokowany(
+          mecz.get("data_meczu"), mecz.get("status")
+      )
 
     row = {"Mecz": mecz_nazwa, "Wynik końcowy": wynik_real}
 
@@ -71,6 +77,7 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       if typ is None:
         row[gracz] = "—"
       else:
+        # Pokaż typ tylko jeśli mecz się zaczął LUB to typ zalogowanego gracza
         if zablokowany or gracz == zalogowany_gracz:
           row[gracz] = f"{typ[0]} - {typ[1]}"
         else:
