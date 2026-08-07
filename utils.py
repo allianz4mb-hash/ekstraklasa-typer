@@ -61,5 +61,42 @@ def oblicz_punkty_za_mecz(typ_gosp, typ_gosc, real_gosp, real_gosc):
 
 def wyciagnij_numer_kolejki(nazwa_kolejki):
   """Pobiera cyfrę numeru kolejki do poprawnego sortowania."""
-  cyfry = re.findall(r"\d+", nazwa_kolejki)
+  cyfry = re.findall(r"\d+", str(nazwa_kolejki))
   return int(cyfry[0]) if cyfry else 0
+
+
+def wyznacz_aktualna_kolejke(wszystkie_mecze):
+  """Wyznacza numer aktualnie rozgrywanej kolejki na podstawie dat meczów."""
+  if not wszystkie_mecze:
+    return "1"
+
+  teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
+  kolejki_dict = {}
+
+  for m in wszystkie_mecze:
+    nr = wyciagnij_numer_kolejki(m.get("kolejka"))
+    data_str = m.get("data_meczu", "")
+
+    if data_str:
+      try:
+        dt = pobierz_czas_pl(data_str)
+      except Exception:
+        dt = None
+    else:
+      dt = None
+
+    if nr not in kolejki_dict:
+      kolejki_dict[nr] = []
+    if dt:
+      kolejki_dict[nr].append(dt)
+
+  posortowane_nry = sorted(kolejki_dict.keys())
+
+  for nr in posortowane_nry:
+    daty = kolejki_dict[nr]
+    if daty:
+      max_data = max(daty)
+      if teraz < max_data:
+        return str(nr)
+
+  return str(posortowane_nry[-1]) if posortowane_nry else "1"
