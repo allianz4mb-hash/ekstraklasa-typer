@@ -4,6 +4,12 @@ import streamlit as st
 import utils
 
 
+def formatuj_nazwe_kolejki(kolejka_raw):
+  """Zamienia np. 'Regular Season - 1' na '1. Kolejka PKO BP Ekstraklasy'"""
+  num = utils.wyciagnij_numer_kolejki(kolejka_raw)
+  return f"{num}. Kolejka PKO BP Ekstraklasy"
+
+
 def render_matryca(wszystkie_mecze, zalogowany_gracz):
   st.header("👁️ Podgląd Typów Rywali / Matryca Kolejki")
 
@@ -16,7 +22,8 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       key=utils.wyciagnij_numer_kolejki,
   )
 
-  kolejki_mapa = {k: utils.formatuj_nazwe_kolejki(k) for k in kolejki_raw}
+  # NAPRAWIONO: wywołujemy formatuj_nazwe_kolejki bezpośrednio (bez utils.)
+  kolejki_mapa = {k: formatuj_nazwe_kolejki(k) for k in kolejki_raw}
 
   # AUTOMATYCZNY WYBÓR AKTUALNEJ KOLEJKI
   aktualna_kolejka_nr = utils.wyznacz_aktualna_kolejke(wszystkie_mecze)
