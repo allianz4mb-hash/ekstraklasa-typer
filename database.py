@@ -167,7 +167,12 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
         gole_a_int = None
 
     status_lower = status_desc.lower()
-    if any(s in status_lower for s in ["finished", "ended", "awarded"]):
+    if any(
+        s in status_lower
+        for s in ["postponed", "cancelled", "delayed", "postp"]
+    ):
+      status = "PPD"
+    elif any(s in status_lower for s in ["finished", "ended", "awarded"]):
       status = "FT"
     elif any(
         s in status_lower
@@ -180,11 +185,14 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     kolejka = str(m.get("round", "Kolejka 1"))
     data_meczu = str(m.get("date", ""))
 
-    wynik_str = (
-        f"{gole_h_int} : {gole_a_int}"
-        if gole_h_int is not None and gole_a_int is not None
-        else "- : -"
-    )
+    if status == "PPD":
+      wynik_str = "Przełożony"
+    else:
+      wynik_str = (
+          f"{gole_h_int} : {gole_a_int}"
+          if gole_h_int is not None and gole_a_int is not None
+          else "- : -"
+      )
 
     rekordy.append({
         "id": mecz_id_int,
@@ -205,7 +213,6 @@ def synchronizuj_mecze_wsadowo(surowe_mecze):
     return False
 
   try:
-    # SUPABASE UPSERT: Błyskawiczna wysyłka całej paczki meczów w 1 zapytaniu
     db.table("mecze").upsert(rekordy).execute()
 
     try:
