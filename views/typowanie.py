@@ -114,16 +114,20 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
         logo_a = mecz.get("logo_goscie", "")
         data_meczu = mecz.get("data_meczu", "")
         godzina_str = formatuj_godzine(data_meczu)
+        status_meczu = str(mecz.get("status", "")).upper()
 
-        # BLOKADA CZASOWA - SPRAWDZAMY CZY MECZ JUŻ SIĘ ROZPOCZĄŁ
+        mecz_przelozony = status_meczu == "PPD"
         mecz_rozpocziety = False
-        if data_meczu:
+
+        if not mecz_przelozony and data_meczu:
           try:
             if data_meczu.endswith("Z"):
               dt_str = data_meczu[:-1] + "+00:00"
             else:
               dt_str = data_meczu
-            dt_meczu = datetime.fromisoformat(dt_str).astimezone(ZoneInfo("Europe/Warsaw"))
+            dt_meczu = datetime.fromisoformat(dt_str).astimezone(
+                ZoneInfo("Europe/Warsaw")
+            )
             if datetime.now(ZoneInfo("Europe/Warsaw")) >= dt_meczu:
               mecz_rozpocziety = True
           except Exception:
@@ -131,20 +135,45 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
 
         if zalogowany_gracz and mecz_id in dotychczasowe_typy:
           domyslne_h, domyslne_a = dotychczasowe_typy[mecz_id]
-          if mecz_rozpocziety:
-              badge_html = f"<div style='text-align: right; color: #d32f2f; font-weight: bold;'>🔒 Zablokowane (Typ: {domyslne_h} - {domyslne_a})</div>"
+          if mecz_przelozony:
+            badge_html = (
+                f"<div style='text-align: right; color: #f57c00; font-weight:"
+                f" bold;'>🟠 Przełożony (Typ: {domyslne_h} - {domyslne_a})</div>"
+            )
+          elif mecz_rozpocziety:
+            badge_html = (
+                f"<div style='text-align: right; color: #d32f2f; font-weight:"
+                f" bold;'>🔒 Zablokowane (Typ: {domyslne_h} - {domyslne_a})</div>"
+            )
           else:
-              badge_html = f"<div style='text-align: right; color: #2e7d32; font-weight: bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a}</div>"
+            badge_html = (
+                f"<div style='text-align: right; color: #2e7d32; font-weight:"
+                f" bold;'>🟢 Obstawiono: {domyslne_h} - {domyslne_a})</div>"
+            )
         else:
           domyslne_h, domyslne_a = 0, 0
-          if mecz_rozpocziety:
-              badge_html = "<div style='text-align: right; color: #d32f2f; font-weight: bold;'>🔒 Zablokowane (Brak typu)</div>"
+          if mecz_przelozony:
+            badge_html = (
+                "<div style='text-align: right; color: #f57c00; font-weight:"
+                " bold;'>🟠 Przełożony (Można typować)</div>"
+            )
+          elif mecz_rozpocziety:
+            badge_html = (
+                "<div style='text-align: right; color: #d32f2f; font-weight:"
+                " bold;'>🔒 Zablokowane (Brak typu)</div>"
+            )
           else:
-              badge_html = "<div style='text-align: right; color: #757575;'>⚪ Brak typu</div>"
+            badge_html = (
+                "<div style='text-align: right; color: #757575;'>⚪ Brak"
+                " typu</div>"
+            )
 
         col_info1, col_info2 = st.columns([1, 1])
         with col_info1:
-          st.caption(f"⏱️ {godzina_str}")
+          if mecz_przelozony:
+            st.caption("⏱️ Termin do ustalenia")
+          else:
+            st.caption(f"⏱️ {godzina_str}")
         with col_info2:
           st.markdown(badge_html, unsafe_allow_html=True)
 
@@ -162,7 +191,7 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
               value=int(domyslne_h),
               key=f"h_{zalogowany_gracz}_{mecz_id}",
               label_visibility="collapsed",
-              disabled=mecz_rozpocziety  # APLIKACJA BLOKADY!
+              disabled=mecz_rozpocziety and not mecz_przelozony,
           )
 
         with col_vs:
@@ -185,10 +214,10 @@ def render_typowanie(wszystkie_mecze, zalogowany_gracz):
               value=int(domyslne_a),
               key=f"a_{zalogowany_gracz}_{mecz_id}",
               label_visibility="collapsed",
-              disabled=mecz_rozpocziety  # APLIKACJA BLOKADY!
+              disabled=mecz_rozpocziety and not mecz_przelozony,
           )
 
-        if zalogowany_gracz and not mecz_rozpocziety:
+        if zalogowany_gracz and (not mecz_rozpocziety or mecz_przelozony):
           nowy_typy.append({
               "gracz_nick": zalogowany_gracz,
               "mecz_id": mecz_id,
