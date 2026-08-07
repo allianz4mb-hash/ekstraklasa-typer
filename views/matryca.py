@@ -17,13 +17,11 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     st.info("Brak meczów w bazie.")
     return
 
-  # Wyciągamy i sortujemy unikalne surowe nazwy kolejek
   kolejki_raw = sorted(
       list(set(m["kolejka"] for m in wszystkie_mecze)),
       key=utils.wyciagnij_numer_kolejki,
   )
 
-  # Tworzymy mapę z ładną nazwą dla selectboxa
   kolejki_mapa = {k: formatuj_nazwe_kolejki(k) for k in kolejki_raw}
 
   wybrana_kolejka_raw = st.selectbox(
@@ -54,7 +52,12 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
   for mecz in mecze_w_kolejce:
     mecz_id = mecz["id"]
     mecz_nazwa = f"{mecz['gospodarze']} - {mecz['goscie']}"
-    wynik_real = mecz.get("wynik") or "- : -"
+    status_meczu = str(mecz.get("status", "")).upper()
+
+    if status_meczu == "PPD":
+      wynik_real = "Przełożony"
+    else:
+      wynik_real = mecz.get("wynik") or "- : -"
 
     zablokowany = utils.czy_mecz_zablokowany(
         mecz.get("data_meczu"), mecz.get("status")
