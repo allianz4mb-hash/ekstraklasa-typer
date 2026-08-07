@@ -4,12 +4,6 @@ import streamlit as st
 import utils
 
 
-def formatuj_nazwe_kolejki(kolejka_raw):
-  """Zamienia np. 'Regular Season - 1' na '1. Kolejka PKO BP Ekstraklasy'"""
-  num = utils.wyciagnij_numer_kolejki(kolejka_raw)
-  return f"{num}. Kolejka PKO BP Ekstraklasy"
-
-
 def render_matryca(wszystkie_mecze, zalogowany_gracz):
   st.header("👁️ Podgląd Typów Rywali / Matryca Kolejki")
 
@@ -22,11 +16,21 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       key=utils.wyciagnij_numer_kolejki,
   )
 
-  kolejki_mapa = {k: formatuj_nazwe_kolejki(k) for k in kolejki_raw}
+  kolejki_mapa = {k: utils.formatuj_nazwe_kolejki(k) for k in kolejki_raw}
+
+  # AUTOMATYCZNY WYBÓR AKTUALNEJ KOLEJKI
+  aktualna_kolejka_nr = utils.wyznacz_aktualna_kolejke(wszystkie_mecze)
+
+  domyslny_idx = 0
+  for idx, k_raw in enumerate(kolejki_raw):
+    if str(utils.wyciagnij_numer_kolejki(k_raw)) == str(aktualna_kolejka_nr):
+      domyslny_idx = idx
+      break
 
   wybrana_kolejka_raw = st.selectbox(
       "Wybierz kolejkę do podglądu:",
       options=kolejki_raw,
+      index=domyslny_idx,
       format_func=lambda k: kolejki_mapa[k],
       key="matryca_kolejka",
   )
@@ -61,7 +65,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     else:
       wynik_real = mecz.get("wynik") or "- : -"
 
-    # Mecz przełożony traktujemy jak NIEZABLOKOWANY (odsłaniamy tylko gdy mecz wystartuje)
     if mecz_przelozony:
       zablokowany = False
     else:
@@ -77,7 +80,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       if typ is None:
         row[gracz] = "—"
       else:
-        # Pokaż typ tylko jeśli mecz się zaczął LUB to typ zalogowanego gracza
         if zablokowany or gracz == zalogowany_gracz:
           row[gracz] = f"{typ[0]} - {typ[1]}"
         else:
