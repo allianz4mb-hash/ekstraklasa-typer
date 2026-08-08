@@ -22,7 +22,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       key=utils.wyciagnij_numer_kolejki,
   )
 
-  # NAPRAWIONO: wywołujemy formatuj_nazwe_kolejki bezpośrednio (bez utils.)
   kolejki_mapa = {k: formatuj_nazwe_kolejki(k) for k in kolejki_raw}
 
   # AUTOMATYCZNY WYBÓR AKTUALNEJ KOLEJKI
@@ -54,8 +53,10 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
   }
 
   st.caption(
-      "💡 *Typy rywali są odsłaniane automatycznie z chwilą rozpoczęcia"
-      " danego meczu.*"
+      "💡 *Typy rywali odsłaniają się po rozpoczęciu meczu.* <br>"
+      " *Oznaczenia po zakończeniu: 🎯 Dokładny wynik (3 pkt) | ✅ Trafiony"
+      " zwycięzca/remis (1 pkt) | ❌ Pudło (0 pkt)*",
+      unsafe_allow_html=True,
   )
 
   tabela_rows = []
@@ -66,11 +67,24 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     status_meczu = str(mecz.get("status", "")).upper()
 
     mecz_przelozony = status_meczu == "PPD"
+    mecz_zakonczony = status_meczu == "FT"
 
     if mecz_przelozony:
       wynik_real = "Przełożony"
     else:
       wynik_real = mecz.get("wynik") or "- : -"
+
+    gole_h = mecz.get("gole_gospodarze")
+    gole_a = mecz.get("gole_goscie")
+
+    # Zapasowe parsowanie wyniku, jeśli gole nie zostały wyciągnięte jako liczby
+    if (gole_h is None or gole_a is None) and ":" in str(wynik_real):
+      parts = str(wynik_real).split(":")
+      try:
+        gole_h = int(parts[0].strip())
+        gole_a = int(parts[1].strip())
+      except Exception:
+        pass
 
     if mecz_przelozony:
       zablokowany = False
@@ -87,8 +101,20 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       if typ is None:
         row[gracz] = "—"
       else:
+        typ_str = f"{typ[0]} - {typ[1]}"
+
+        # Dodanie ikon punktowych tylko dla zakończonych meczów
+        if mecz_zakonczony and gole_h is not None and gole_a is not None:
+          pts = utils.oblicz_punkty_za_mecz(typ[0], typ[1], gole_h, gole_a)
+          if pts == 3:
+            typ_str += " 🎯"
+          elif pts == 1:
+            typ_str += " ✅"
+          else:
+            typ_str += " ❌"
+
         if zablokowany or gracz == zalogowany_gracz:
-          row[gracz] = f"{typ[0]} - {typ[1]}"
+          row[gracz] = typ_str
         else:
           row[gracz] = "🔒 Ukryty"
 
