@@ -52,12 +52,9 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       for t in wszystkie_typy
   }
 
-  st.caption(
-      "💡 *Typy rywali odsłaniają się po rozpoczęciu meczu.* <br>"
-      " *Oznaczenia po zakończeniu: 🎯 Dokładny wynik (3 pkt) | ✅ Trafiony"
-      " zwycięzca/remis (1 pkt) | ❌ Pudło (0 pkt)*",
-      unsafe_allow_html=True,
-  )
+  # SŁOWNIK DO ZLICZANIA PUNKTÓW DANEJ KOLEJKI
+  punkty_graczy_kolejka = {gracz: 0 for gracz in lista_graczy}
+  rozegrane_mecze_w_kolejce = 0
 
   tabela_rows = []
 
@@ -69,6 +66,9 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     mecz_przelozony = status_meczu == "PPD"
     mecz_zakonczony = status_meczu == "FT"
 
+    if mecz_zakonczony:
+      rozegrane_mecze_w_kolejce += 1
+
     if mecz_przelozony:
       wynik_real = "Przełożony"
     else:
@@ -77,7 +77,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     gole_h = mecz.get("gole_gospodarze")
     gole_a = mecz.get("gole_goscie")
 
-    # Zapasowe parsowanie wyniku, jeśli gole nie zostały wyciągnięte jako liczby
     if (gole_h is None or gole_a is None) and ":" in str(wynik_real):
       parts = str(wynik_real).split(":")
       try:
@@ -103,9 +102,9 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       else:
         typ_str = f"{typ[0]} - {typ[1]}"
 
-        # Dodanie ikon punktowych tylko dla zakończonych meczów
         if mecz_zakonczony and gole_h is not None and gole_a is not None:
           pts = utils.oblicz_punkty_za_mecz(typ[0], typ[1], gole_h, gole_a)
+          punkty_graczy_kolejka[gracz] += pts
           if pts == 3:
             typ_str += " 🎯"
           elif pts == 1:
@@ -120,9 +119,49 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
 
     tabela_rows.append(row)
 
+  # WYŁANIANIE TURBOKOZAKA KOLEJKI
+  if rozegrane_mecze_w_kolejce > 0 and punkty_graczy_kolejka:
+    max_pkt = max(punkty_graczy_kolejka.values())
+    if max_pkt > 0:
+      liderzy = [
+          g for g, pkt in punkty_graczy_kolejka.items() if pkt == max_pkt
+      ]
+      liderzy_str = ", ".join(liderzy)
+
+      tytuł_sekcji = (
+          "⚡ TURBOKOZACY KOLEJKI ⚡"
+          if len(liderzy) > 1
+          else "⚡ TURBOKOZAK KOLEJKI ⚡"
+      )
+
+      st.markdown(
+          f"""
+            <div style="background: linear-gradient(135deg, #1f1c2c, #928dab); padding: 15px; border-radius: 12px; text-align: center; color: white; margin-bottom: 20px; border: 1px solid #ffd700;">
+                <h3 style="margin: 0; color: #ffd700; font-size: 1.2rem;">{tytuł_sekcji}</h3>
+                <h2 style="margin: 5px 0; font-size: 1.8rem; color: #ffffff;">👑 {liderzy_str}</h2>
+                <p style="margin: 0; font-size: 1.1rem; color: #e0e0e0;">Zdobyty wynik: <b>{max_pkt} pkt</b></p>
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+  st.caption(
+      "💡 *Typy rywali odsłaniają się po rozpoczęciu meczu.* <br>"
+      " *Oznaczenia po zakończeniu: 🎯 Dokładny wynik (3 pkt) | ✅ Trafiony"
+      " zwycięzca/remis (1 pkt) | ❌ Pudło (0 pkt)*",
+      unsafe_allow_html=True,
+  )
+
+  # ZMIANA NAGŁÓWKÓW KOLUMN — DODAJEMY PUNKTY DO IMION GRACZY
+  mapa_zmiany_kolumn = {
+      gracz: f"{gracz} ({punkty_graczy_kolejka[gracz]} pkt)"
+      for gracz in lista_graczy
+  }
+
   df_matryca = pd.DataFrame(tabela_rows)
 
   if not df_matryca.empty:
+    df_matryca = df_matryca.rename(columns=mapa_zmiany_kolumn)
     st.dataframe(df_matryca, use_container_width=True, hide_index=True)
   else:
     st.info("Brak typów dla tej kolejki.")
