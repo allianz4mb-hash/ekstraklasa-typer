@@ -170,7 +170,7 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
               f"""
                     <div style="background: linear-gradient(135deg, #2c1f1c, #4a1c1c); padding: 12px; border-radius: 10px; text-align: center; color: white; border: 1px solid #ff4b4b;">
                         <h4 style="margin: 0; color: #ff8f8f; font-size: 1rem;">{tytuł_pech}</h4>
-                        <h3 style="margin: 5px 0; font-size: 1.4rem; color: #ffffff;">🎯 {pechowcy_str}</h3>
+                        <h3 style="margin: 5px 0; font-size: 1.4rem; color: #ffffff;">🙈 {pechowcy_str}</h3>
                         <p style="margin: 0; font-size: 0.9rem; color: #e0e0e0;">Wynik: <b>{min_pkt} pkt</b></p>
                     </div>
                     """,
