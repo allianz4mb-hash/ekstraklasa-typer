@@ -16,7 +16,7 @@ def render_regulamin():
 
     ### ⏱️ 2. Czas na składanie typów
     * Typy można wpisywać oraz modyfikować **do momentu rozpoczęcia danego meczu**.
-    * Wraz ze pierwszym gwizdkiem arbitra opcja edycji typów dla danego spotkania wygasa.
+    * Wraz z pierwszym gwizdkiem arbitra opcja edycji typów dla danego spotkania wygasa.
 
     ---
 
@@ -29,11 +29,24 @@ def render_regulamin():
     ---
 
     ### 💰 4. Wpisowe i Nagrody (Runda Jesienna)
-    * Każdy uczestnik zobowiązuje się przelać na wskazane konto kwotę **100 zł**.
-    * Pula nagród po zakończeniu **rundy jesiennej** zostanie podzielona w następujący sposób:
-      * **1. miejsce:** 60% zebranej kwoty
-      * **2. miejsce:** 25% zebranej kwoty
-      * **3. miejsce:** 15% zebranej kwoty
+    * Składka wpisowa wynosi **100 zł** od uczestnika.
+    
+    * 💳 **Szybka płatność Revolut:**
+      * Link: [Prześlij przez Revolut](https://revolut.me/mateusfpzf)
+
+    * 🏛️ **Tradycyjny przelew bankowy:**
+      * **Odbiorca:** Mateusz Bielecki
+      * **Numer konta:** `20 2910 0006 0000 0000 0268 4494`
+      * **Bank:** UniCredit NV/SA Oddział w Polsce, Dobra 40, 00-344 Warszawa
+    
+    * ⚠️ **WAŻNE — Tytuł przelewu / wpłaty:**
+      * W tytule przelewu podaj koniecznie swój **nick / nazwę konta z Typera** (np. `Składka Typer - Mateusz`), abym wiedział, od kogo wpłynęła wpłata!
+
+    * **Podział puli nagród po rundzie jesiennej:**
+      * **1. miejsce:** 60% zebranej kwoty 🥇
+      * **2. miejsce:** 25% zebranej kwoty 🥈
+      * **3. miejsce:** 15% zebranej kwoty 🥉
+    
     * 💡 *Pamiętaj: wygrana ma charakter symboliczny, gramy przede wszystkim dla świetnej zabawy!*
 
     ---
