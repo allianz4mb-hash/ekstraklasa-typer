@@ -246,6 +246,7 @@ def pobierz_czas_synchro():
   except Exception:
     return "Brak danych"
 
+
 def pobierz_status_wplat():
   try:
     res = db.table("gracze").select("nick, wplacono").order("nick").execute()
