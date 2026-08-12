@@ -194,25 +194,84 @@ czas_synchro = database.pobierz_czas_synchro()
 st.sidebar.caption(f"⏱️ **Ostatnia synchro:** {czas_synchro}")
 
 # --- WCHODZENIE W ZAKŁADKI ---
-tab_typowanie, tab_ranking, tab_matryca, tab_profil, tab_regulamin = st.tabs([
+lista_zakladek = [
     "🎯 Formularz Typowania",
     "🏆 Tabela / Ranking",
     "👁️ Podgląd Typów",
     "⚙️ Profil",
     "📜 Regulamin",
-])
+]
 
-with tab_typowanie:
+if wybrany_gracz == "Mateusz":
+  lista_zakladek.append("💰 Składki (Admin)")
+
+tabs = st.tabs(lista_zakladek)
+
+with tabs[0]:
   render_typowanie(wszystkie_mecze, wybrany_gracz)
 
-with tab_ranking:
+with tabs[1]:
   render_ranking(wszystkie_mecze)
 
-with tab_matryca:
+with tabs[2]:
   render_matryca(wszystkie_mecze, wybrany_gracz)
 
-with tab_profil:
+with tabs[3]:
   render_profil(wybrany_gracz, wszystkie_mecze)
 
-with tab_regulamin:
+with tabs[4]:
   render_regulamin()
+
+# --- ZAKŁADKA SKŁADEK DLA ADMINA ---
+if wybrany_gracz == "Mateusz":
+  with tabs[5]:
+    st.header("💰 Zarządzanie Wpłatami na Nagrody")
+    st.markdown("---")
+
+    statusy_wplat = database.pobierz_status_wplat()
+    wszyscy = database.pobierz_liste_graczy()
+
+    if not wszyscy:
+      st.info("Brak graczy w bazie danych.")
+    else:
+      oplaceni_count = sum(1 for g in wszyscy if statusy_wplat.get(g, False))
+      total_count = len(wszyscy)
+      zebrana_kwota = oplaceni_count * 100
+      pelna_pula = total_count * 100
+
+      col_k1, col_k2 = st.columns(2)
+      with col_k1:
+        st.metric("👥 Status wpłat", f"{oplaceni_count} / {total_count} graczy")
+      with col_k2:
+        st.metric("💵 Zebrana pula", f"{zebrana_kwota} zł / {pelna_pula} zł")
+
+      st.markdown("---")
+      st.subheader("Lista uczestników:")
+
+      nowe_stany = {}
+      with st.form("form_wplaty"):
+        cols = st.columns(2)
+        for i, gracz in enumerate(wszyscy):
+          c = cols[i % 2]
+          obecny_stan = statusy_wplat.get(gracz, False)
+          etykieta = (
+              f"✅ **{gracz}** (Opłacono)"
+              if obecny_stan
+              else f"⏳ **{gracz}** (Oczekuje na wpłatę)"
+          )
+          nowe_stany[gracz] = c.checkbox(
+              etykieta, value=obecny_stan, key=f"wplata_{gracz}"
+          )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        btn_zapisz_wplaty = st.form_submit_button(
+            "💾 Zapisz zmiany wpłat", type="primary", use_container_width=True
+        )
+
+        if btn_zapisz_wplaty:
+          sukces = database.zapisz_status_wplat(nowe_stany)
+          if sukces:
+            st.success("✅ Zaktualizowano statusy wpłat w bazie!")
+            st.rerun()
+          else:
+            st.error("❌ Błąd zapisu do bazy.")
