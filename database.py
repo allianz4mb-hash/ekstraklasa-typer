@@ -245,3 +245,19 @@ def pobierz_czas_synchro():
     return "Brak danych"
   except Exception:
     return "Brak danych"
+
+def pobierz_status_wplat():
+  try:
+    res = db.table("gracze").select("nick, wplacono").order("nick").execute()
+    return {row["nick"]: bool(row.get("wplacono", False)) for row in res.data}
+  except Exception:
+    return {}
+
+
+def zapisz_status_wplat(mapa_wplat):
+  try:
+    for nick, stan in mapa_wplat.items():
+      db.table("gracze").update({"wplacono": stan}).eq("nick", nick).execute()
+    return True
+  except Exception:
+    return False
