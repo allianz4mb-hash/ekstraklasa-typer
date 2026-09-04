@@ -47,8 +47,12 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
   wszystkie_typy = database.pobierz_wszystkie_typy()
   lista_graczy = database.pobierz_liste_graczy()
 
+  # POPRAWKA: Rzutowanie nicku i ID meczu na stringi dla 100% dopasowania kluczy
   mapa_typow = {
-      (t["gracz_nick"], t["mecz_id"]): (t["typ_gospodarze"], t["typ_goscie"])
+      (str(t["gracz_nick"]).strip(), str(t["mecz_id"])): (
+          t["typ_gospodarze"],
+          t["typ_goscie"],
+      )
       for t in wszystkie_typy
   }
 
@@ -96,7 +100,8 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     row = {"Mecz": mecz_nazwa, "Wynik końcowy": wynik_real}
 
     for gracz in lista_graczy:
-      typ = mapa_typow.get((gracz, mecz_id))
+      # POPRAWKA: Odczyt z ujednoliconym kluczem tekstowym
+      typ = mapa_typow.get((str(gracz).strip(), str(mecz_id)))
 
       if typ is None:
         row[gracz] = "—"
