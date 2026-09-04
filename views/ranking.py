@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from zoneinfo import ZoneInfo
 import database
 import pandas as pd
@@ -8,54 +9,52 @@ import streamlit as st
 def wyciągnij_numer_kolejki(kolejka_raw):
   if not kolejka_raw:
     return 1
-  if "-" in str(kolejka_raw):
-    parts = str(kolejka_raw).split("-")
-    nr = parts[-1].strip()
-    if nr.isdigit():
-      return int(nr)
-  if str(kolejka_raw).isdigit():
-    return int(kolejka_raw)
-  return 1
+  cyfry = re.findall(r"\d+", str(kolejka_raw))
+  return int(cyfry[0]) if cyfry else 1
 
 
 def wyznacz_aktualna_kolejke(wszystkie_mecze):
+  """Odporna logika wyznaczania kolejki - ignoruje przestarzałe lub odległe mecze przełożone."""
   if not wszystkie_mecze:
     return "1"
 
   teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
-  kolejki_dict = {}
+  kolejki_przyszle = {}
 
   for m in wszystkie_mecze:
-    nr = wyciągnij_numer_kolejki(m.get("kolejka"))
-    data_str = m.get("data_meczu", "")
+    status = str(m.get("status", "")).upper()
+    if status in ["FT", "PPD"]:
+      continue
 
+    data_str = m.get("data_meczu", "")
+    dt = None
     if data_str:
       try:
-        if data_str.endswith("Z"):
-          data_str = data_str[:-1] + "+00:00"
-        dt = datetime.fromisoformat(data_str).astimezone(
+        val_str = str(data_str)
+        if val_str.endswith("Z"):
+          val_str = val_str[:-1] + "+00:00"
+        dt = datetime.fromisoformat(val_str).astimezone(
             ZoneInfo("Europe/Warsaw")
         )
       except Exception:
         dt = None
-    else:
-      dt = None
 
-    if nr not in kolejki_dict:
-      kolejki_dict[nr] = []
-    if dt:
-      kolejki_dict[nr].append(dt)
+    if dt and dt >= teraz:
+      nr = wyciągnij_numer_kolejki(m.get("kolejka"))
+      if nr not in kolejki_przyszle:
+        kolejki_przyszle[nr] = []
+      kolejki_przyszle[nr].append(dt)
 
-  posortowane_nry = sorted(kolejki_dict.keys())
+  if kolejki_przyszle:
+    najblizszy_nr = min(
+        kolejki_przyszle.keys(), key=lambda k: min(kolejki_przyszle[k])
+    )
+    return str(najblizszy_nr)
 
-  for nr in posortowane_nry:
-    daty = kolejki_dict[nr]
-    if daty:
-      max_data = max(daty)
-      if teraz < max_data:
-        return str(nr)
-
-  return str(posortowane_nry[-1]) if posortowane_nry else "1"
+  wszystkie_nry = [
+      wyciągnij_numer_kolejki(m.get("kolejka")) for m in wszystkie_mecze
+  ]
+  return str(max(wszystkie_nry)) if wszystkie_nry else "1"
 
 
 def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a):
@@ -73,11 +72,9 @@ def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a):
   except (ValueError, TypeError):
     return 0
 
-  # 1. Dokładny wynik -> 3 pkt
   if typ_h == wynik_h and typ_a == wynik_a:
     return 3
 
-  # 2. Trafione rozstrzygnięcie (1X2) -> 1 pkt
   roznica_typ = typ_h - typ_a
   roznica_wynik = wynik_h - wynik_a
 
@@ -120,14 +117,12 @@ def render_ranking(wszystkie_mecze):
     nick = t.get("gracz_nick")
     mecz_id = t.get("mecz_id")
 
-    # Ścisłe dopasowanie gracza z bazy
     if nick not in statystyki:
       continue
 
     if mecz_id in mapa_meczow:
       mecz = mapa_meczow[mecz_id]
 
-      # Liczymy punkty TYLKO dla meczów zakończonych (FT)
       status_meczu = str(mecz.get("status", "")).upper()
       if status_meczu != "FT":
         continue
@@ -136,7 +131,6 @@ def render_ranking(wszystkie_mecze):
       gole_a = mecz.get("gole_goscie")
       wynik_str = str(mecz.get("wynik", ""))
 
-      # Awaryjne wyciąganie goli jeśli kolumny int byłyby puste
       if (gole_h is None or gole_a is None) and ":" in wynik_str:
         parts = wynik_str.split(":")
         try:
@@ -153,7 +147,6 @@ def render_ranking(wszystkie_mecze):
             gole_a,
         )
 
-        # Każdy zakończony mecz z typem zwiększa licznik zagranych meczów
         statystyki[nick]["Mecze"] += 1
         statystyki[nick]["Punkty"] += pts
 
@@ -297,7 +290,7 @@ def render_ranking(wszystkie_mecze):
       f'<div class="tv-header"><div><div class="tv-logo-sub">PKO BANK'
       ' POLSKI</div><div class="tv-logo-title">⚽'
       f' EKSTRAKLAPA</div></div><div class="tv-round-badge">{aktualna_kolejka_nr}.'
-      " KOLEJKA</div></div>"
+      ' KOLEJKA</div></div>'
   )
 
   html_rows = []
