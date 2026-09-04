@@ -43,7 +43,7 @@ def czy_mecz_zablokowany(data_str, status_meczu):
 
 def oblicz_punkty_za_mecz(typ_gosp, typ_gosc, real_gosp, real_gosc):
   """Silnik punktowy: 3 pkt za trafiony wynik, 1 pkt za rozstrzygnięcie, 0 pkt w pozostałych przyp."""
-  if typ_gosp == real_gosc and typ_gosc == real_gosc:
+  if typ_gosp == real_gosp and typ_gosc == real_gosc:
     return 3
 
   diff_typ = typ_gosp - typ_gosc
@@ -66,39 +66,32 @@ def wyciagnij_numer_kolejki(nazwa_kolejki):
 
 
 def wyznacz_aktualna_kolejke(wszystkie_mecze):
-  """Odporna logika wyznaczania aktualnej kolejki (odporna na przełożone mecze)."""
+  """Wyznacza kolejkę, której nierozegrane mecze są NAJBLIŻSZE obecnej dacie."""
   if not wszystkie_mecze:
     return "1"
 
   teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
-  kolejki_dict = {}
+  kolejki_przyszle = {}
 
   for m in wszystkie_mecze:
     status = str(m.get("status", "")).upper()
-    # Ignorujemy mecze przełożone przy wyznaczaniu aktualnej kolejki!
-    if status == "PPD":
+    if status in ["FT", "PPD"]:
       continue
 
-    nr = wyciagnij_numer_kolejki(m.get("kolejka"))
     data_str = m.get("data_meczu", "")
-
     dt = pobierz_czas_pl(data_str) if data_str else None
 
-    if nr not in kolejki_dict:
-      kolejki_dict[nr] = []
-    if dt:
-      kolejki_dict[nr].append(dt)
+    if dt and dt >= teraz:
+      nr = wyciagnij_numer_kolejki(m.get("kolejka"))
+      if nr not in kolejki_przyszle:
+        kolejki_przyszle[nr] = []
+      kolejki_przyszle[nr].append(dt)
 
-  if not kolejki_dict:
-    return "1"
+  # Jeśli znaleziono przyszłe/trwające mecze, wybieramy kolejkę z najwcześniejszym meczem
+  if kolejki_przyszle:
+    najblizszy_nr = min(kolejki_przyszle.keys(), key=lambda k: min(kolejki_przyszle[k]))
+    return str(najblizszy_nr)
 
-  posortowane_nry = sorted(kolejki_dict.keys())
-
-  # 1. Szukamy pierwszej kolejki, która ma jakikolwiek mecz W PRZYSZŁOŚCI
-  for nr in posortowane_nry:
-    daty = kolejki_dict[nr]
-    if any(d > teraz for d in daty):
-      return str(nr)
-
-  # 2. Jeśli wszystkie mecze w sezonie już minęły, zwracamy ostatnią kolejkę
-  return str(posortowane_nry[-1])
+  # Jeśli wszystkie mecze w bazie minęły, zwracamy najwyższy numer kolejki
+  wszystkie_nry = [wyciagnij_numer_kolejki(m.get("kolejka")) for m in wszystkie_mecze]
+  return str(max(wszystkie_nry)) if wszystkie_nry else "1"
