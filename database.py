@@ -95,11 +95,13 @@ def zmien_pin_gracza(nick, nowy_pin):
 def pobierz_typy_gracza(nick):
   if not nick:
     return {}
+  # Dodano order("id") i limit(50000)
   res = (
       db.table("typy")
       .select("*")
       .eq("gracz_nick", nick)
-      .limit(1000)
+      .order("id", desc=False)
+      .limit(50000)
       .execute()
   )
   return {
@@ -109,8 +111,14 @@ def pobierz_typy_gracza(nick):
 
 
 def pobierz_wszystkie_typy():
-  # POPRAWKA: Zwiększenie limitu z domyślnego 1000 do 10000
-  res = db.table("typy").select("*").limit(10000).execute()
+  # KROK NAPRAWCZY: Jawne sortowanie i zlikwidowanie limitu PostgREST
+  res = (
+      db.table("typy")
+      .select("*")
+      .order("id", desc=False)
+      .limit(50000)
+      .execute()
+  )
   return res.data
 
 
@@ -128,7 +136,6 @@ def zapisz_typy_gracza(lista_typow):
     })
 
   try:
-    # Bezpieczne zapisywanie (upsert) bez błędu unikalności
     db.table("typy").upsert(rekordy).execute()
     return True
   except Exception as e:
