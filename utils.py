@@ -66,32 +66,37 @@ def wyciagnij_numer_kolejki(nazwa_kolejki):
 
 
 def wyznacz_aktualna_kolejke(wszystkie_mecze):
-  """Wyznacza kolejkę, której nierozegrane mecze są NAJBLIŻSZE obecnej dacie."""
+  """Wyznacza numer aktualnie rozgrywanej kolejki na podstawie dat meczów."""
   if not wszystkie_mecze:
     return "1"
 
   teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
-  kolejki_przyszle = {}
+  kolejki_dict = {}
 
   for m in wszystkie_mecze:
-    status = str(m.get("status", "")).upper()
-    if status in ["FT", "PPD"]:
-      continue
-
+    nr = wyciagnij_numer_kolejki(m.get("kolejka"))
     data_str = m.get("data_meczu", "")
-    dt = pobierz_czas_pl(data_str) if data_str else None
 
-    if dt and dt >= teraz:
-      nr = wyciagnij_numer_kolejki(m.get("kolejka"))
-      if nr not in kolejki_przyszle:
-        kolejki_przyszle[nr] = []
-      kolejki_przyszle[nr].append(dt)
+    if data_str:
+      try:
+        dt = pobierz_czas_pl(data_str)
+      except Exception:
+        dt = None
+    else:
+      dt = None
 
-  # Jeśli znaleziono przyszłe/trwające mecze, wybieramy kolejkę z najwcześniejszym meczem
-  if kolejki_przyszle:
-    najblizszy_nr = min(kolejki_przyszle.keys(), key=lambda k: min(kolejki_przyszle[k]))
-    return str(najblizszy_nr)
+    if nr not in kolejki_dict:
+      kolejki_dict[nr] = []
+    if dt:
+      kolejki_dict[nr].append(dt)
 
-  # Jeśli wszystkie mecze w bazie minęły, zwracamy najwyższy numer kolejki
-  wszystkie_nry = [wyciagnij_numer_kolejki(m.get("kolejka")) for m in wszystkie_mecze]
-  return str(max(wszystkie_nry)) if wszystkie_nry else "1"
+  posortowane_nry = sorted(kolejki_dict.keys())
+
+  for nr in posortowane_nry:
+    daty = kolejki_dict[nr]
+    if daty:
+      max_data = max(daty)
+      if teraz < max_data:
+        return str(nr)
+
+  return str(posortowane_nry[-1]) if posortowane_nry else "1"
