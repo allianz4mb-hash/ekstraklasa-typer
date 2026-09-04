@@ -95,31 +95,63 @@ def zmien_pin_gracza(nick, nowy_pin):
 def pobierz_typy_gracza(nick):
   if not nick:
     return {}
-  # Dodano order("id") i limit(50000)
-  res = (
-      db.table("typy")
-      .select("*")
-      .eq("gracz_nick", nick)
-      .order("id", desc=False)
-      .limit(50000)
-      .execute()
-  )
+
+  typy_gracza = []
+  krok = 1000
+  od = 0
+
+  while True:
+    do = od + krok - 1
+    res = (
+        db.table("typy")
+        .select("*")
+        .eq("gracz_nick", nick)
+        .order("id", desc=False)
+        .range(od, do)
+        .execute()
+    )
+    paczka = res.data
+    if not paczka:
+      break
+    typy_gracza.extend(paczka)
+    if len(paczka) < krok:
+      break
+    od += krok
+
   return {
       row["mecz_id"]: (row["typ_gospodarze"], row["typ_goscie"])
-      for row in res.data
+      for row in typy_gracza
   }
 
 
 def pobierz_wszystkie_typy():
-  # KROK NAPRAWCZY: Jawne sortowanie i zlikwidowanie limitu PostgREST
-  res = (
-      db.table("typy")
-      .select("*")
-      .order("id", desc=False)
-      .limit(50000)
-      .execute()
-  )
-  return res.data
+  """Pobiera WSZYSTKIE typy z bazy danych przy użyciu automatycznego stronicowania (pagination)."""
+  wszystkie_typy = []
+  krok = 1000
+  od = 0
+
+  while True:
+    do = od + krok - 1
+    res = (
+        db.table("typy")
+        .select("*")
+        .order("id", desc=False)
+        .range(od, do)
+        .execute()
+    )
+    paczka = res.data
+
+    if not paczka:
+      break
+
+    wszystkie_typy.extend(paczka)
+
+    if len(paczka) < krok:
+      break
+
+    od += krok
+
+  return wszystkie_typy
 
 
 def zapisz_typy_gracza(lista_typow):
