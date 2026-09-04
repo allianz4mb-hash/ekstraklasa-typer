@@ -66,7 +66,7 @@ def wyciagnij_numer_kolejki(nazwa_kolejki):
 
 
 def wyznacz_aktualna_kolejke(wszystkie_mecze):
-  """Wyznacza kolejkę, której nierozegrane mecze są NAJBLIŻSZE obecnej dacie."""
+  """Odporna logika wyznaczania aktualnej kolejki (pomiata przełożone mecze)."""
   if not wszystkie_mecze:
     return "1"
 
