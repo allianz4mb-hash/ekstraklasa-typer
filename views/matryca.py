@@ -5,7 +5,6 @@ import utils
 
 
 def formatuj_nazwe_kolejki(kolejka_raw):
-  """Zamienia np. 'Regular Season - 1' na '1. Kolejka PKO BP Ekstraklasy'"""
   num = utils.wyciagnij_numer_kolejki(kolejka_raw)
   return f"{num}. Kolejka PKO BP Ekstraklasy"
 
@@ -24,7 +23,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
 
   kolejki_mapa = {k: formatuj_nazwe_kolejki(k) for k in kolejki_raw}
 
-  # AUTOMATYCZNY WYBÓR AKTUALNEJ KOLEJKI
   aktualna_kolejka_nr = utils.wyznacz_aktualna_kolejke(wszystkie_mecze)
 
   domyslny_idx = 0
@@ -47,7 +45,7 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
   wszystkie_typy = database.pobierz_wszystkie_typy()
   lista_graczy = database.pobierz_liste_graczy()
 
-  # POPRAWKA: Rzutowanie nicku i ID meczu na stringi dla 100% dopasowania kluczy
+  # Wymuszenie konwersji nicku i ID meczu na stringi dla 100% dopasowania
   mapa_typow = {
       (str(t["gracz_nick"]).strip(), str(t["mecz_id"])): (
           t["typ_gospodarze"],
@@ -56,7 +54,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
       for t in wszystkie_typy
   }
 
-  # SŁOWNIKI DO ZLICZANIA PUNKTÓW I AKTYWNOŚCI
   punkty_graczy_kolejka = {gracz: 0 for gracz in lista_graczy}
   wytypowane_mecze_graczy = {gracz: 0 for gracz in lista_graczy}
   rozegrane_mecze_w_kolejce = 0
@@ -100,7 +97,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
     row = {"Mecz": mecz_nazwa, "Wynik końcowy": wynik_real}
 
     for gracz in lista_graczy:
-      # POPRAWKA: Odczyt z ujednoliconym kluczem tekstowym
       typ = mapa_typow.get((str(gracz).strip(), str(mecz_id)))
 
       if typ is None:
@@ -126,7 +122,6 @@ def render_matryca(wszystkie_mecze, zalogowany_gracz):
 
     tabela_rows.append(row)
 
-  # WYŁANIANIE TURBOKOZAKA I MISTERA PUDŁO
   if rozegrane_mecze_w_kolejce > 0 and punkty_graczy_kolejka:
     aktywni_gracze_pts = {
         g: pkt
