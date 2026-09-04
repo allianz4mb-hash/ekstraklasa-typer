@@ -95,7 +95,13 @@ def zmien_pin_gracza(nick, nowy_pin):
 def pobierz_typy_gracza(nick):
   if not nick:
     return {}
-  res = db.table("typy").select("*").eq("gracz_nick", nick).execute()
+  res = (
+      db.table("typy")
+      .select("*")
+      .eq("gracz_nick", nick)
+      .limit(1000)
+      .execute()
+  )
   return {
       row["mecz_id"]: (row["typ_gospodarze"], row["typ_goscie"])
       for row in res.data
@@ -103,29 +109,31 @@ def pobierz_typy_gracza(nick):
 
 
 def pobierz_wszystkie_typy():
-  res = db.table("typy").select("*").execute()
+  # POPRAWKA: Zwiększenie limitu z domyślnego 1000 do 10000
+  res = db.table("typy").select("*").limit(10000).execute()
   return res.data
 
 
 def zapisz_typy_gracza(lista_typow):
   if not lista_typow:
     return True
-  res = db.table("typy").select("gracz_nick, mecz_id").execute()
-  istniejace = {(r["gracz_nick"], r["mecz_id"]) for r in res.data}
 
-  do_dodania = []
+  rekordy = []
   for t in lista_typow:
-    if (t["gracz_nick"], t["mecz_id"]) in istniejace:
-      db.table("typy").update({
-          "typ_gospodarze": t["typ_gospodarze"],
-          "typ_goscie": t["typ_goscie"],
-      }).eq("gracz_nick", t["gracz_nick"]).eq("mecz_id", t["mecz_id"]).execute()
-    else:
-      do_dodania.append(t)
+    rekordy.append({
+        "gracz_nick": str(t["gracz_nick"]),
+        "mecz_id": int(t["mecz_id"]),
+        "typ_gospodarze": int(t["typ_gospodarze"]),
+        "typ_goscie": int(t["typ_goscie"]),
+    })
 
-  if do_dodania:
-    db.table("typy").insert(do_dodania).execute()
-  return True
+  try:
+    # Bezpieczne zapisywanie (upsert) bez błędu unikalności
+    db.table("typy").upsert(rekordy).execute()
+    return True
+  except Exception as e:
+    st.error(f"Błąd zapisu typów: {str(e)}")
+    return False
 
 
 def synchronizuj_mecze_wsadowo(surowe_mecze):
