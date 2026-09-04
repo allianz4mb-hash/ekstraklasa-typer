@@ -43,7 +43,7 @@ def czy_mecz_zablokowany(data_str, status_meczu):
 
 def oblicz_punkty_za_mecz(typ_gosp, typ_gosc, real_gosp, real_gosc):
   """Silnik punktowy: 3 pkt za trafiony wynik, 1 pkt za rozstrzygnięcie, 0 pkt w pozostałych przyp."""
-  if typ_gosp == real_gosp and typ_gosc == real_gosc:
+  if typ_gosp == real_gosc and typ_gosc == real_gosc:
     return 3
 
   diff_typ = typ_gosp - typ_gosc
@@ -66,7 +66,7 @@ def wyciagnij_numer_kolejki(nazwa_kolejki):
 
 
 def wyznacz_aktualna_kolejke(wszystkie_mecze):
-  """Wyznacza numer aktualnie rozgrywanej kolejki na podstawie dat meczów."""
+  """Odporna logika wyznaczania aktualnej kolejki (odporna na przełożone mecze)."""
   if not wszystkie_mecze:
     return "1"
 
@@ -74,29 +74,31 @@ def wyznacz_aktualna_kolejke(wszystkie_mecze):
   kolejki_dict = {}
 
   for m in wszystkie_mecze:
+    status = str(m.get("status", "")).upper()
+    # Ignorujemy mecze przełożone przy wyznaczaniu aktualnej kolejki!
+    if status == "PPD":
+      continue
+
     nr = wyciagnij_numer_kolejki(m.get("kolejka"))
     data_str = m.get("data_meczu", "")
 
-    if data_str:
-      try:
-        dt = pobierz_czas_pl(data_str)
-      except Exception:
-        dt = None
-    else:
-      dt = None
+    dt = pobierz_czas_pl(data_str) if data_str else None
 
     if nr not in kolejki_dict:
       kolejki_dict[nr] = []
     if dt:
       kolejki_dict[nr].append(dt)
 
+  if not kolejki_dict:
+    return "1"
+
   posortowane_nry = sorted(kolejki_dict.keys())
 
+  # 1. Szukamy pierwszej kolejki, która ma jakikolwiek mecz W PRZYSZŁOŚCI
   for nr in posortowane_nry:
     daty = kolejki_dict[nr]
-    if daty:
-      max_data = max(daty)
-      if teraz < max_data:
-        return str(nr)
+    if any(d > teraz for d in daty):
+      return str(nr)
 
-  return str(posortowane_nry[-1]) if posortowane_nry else "1"
+  # 2. Jeśli wszystkie mecze w sezonie już minęły, zwracamy ostatnią kolejkę
+  return str(posortowane_nry[-1])
