@@ -1,5 +1,4 @@
 from datetime import datetime
-import re
 from zoneinfo import ZoneInfo
 import database
 import pandas as pd
@@ -9,74 +8,71 @@ import streamlit as st
 def wyciągnij_numer_kolejki(kolejka_raw):
   if not kolejka_raw:
     return 1
-  cyfry = re.findall(r"\d+", str(kolejka_raw))
-  return int(cyfry[0]) if cyfry else 1
+  if "-" in str(kolejka_raw):
+    parts = str(kolejka_raw).split("-")
+    nr = parts[-1].strip()
+    if nr.isdigit():
+      return int(nr)
+  if str(kolejka_raw).isdigit():
+    return int(kolejka_raw)
+  return 1
 
 
 def wyznacz_aktualna_kolejke(wszystkie_mecze):
-  """Kolejka, której nierozegrane mecze są NAJBLIŻSZE obecnej dacie."""
   if not wszystkie_mecze:
     return "1"
 
   teraz = datetime.now(ZoneInfo("Europe/Warsaw"))
-  kolejki_przyszle = {}
+  kolejki_dict = {}
 
   for m in wszystkie_mecze:
-    status = str(m.get("status", "")).upper()
-    if status in ["FT", "PPD"]:
-      continue
-
+    nr = wyciągnij_numer_kolejki(m.get("kolejka"))
     data_str = m.get("data_meczu", "")
-    dt = None
+
     if data_str:
       try:
-        val_str = str(data_str)
-        if val_str.endswith("Z"):
-          val_str = val_str[:-1] + "+00:00"
-        dt = datetime.fromisoformat(val_str).astimezone(
+        if data_str.endswith("Z"):
+          data_str = data_str[:-1] + "+00:00"
+        dt = datetime.fromisoformat(data_str).astimezone(
             ZoneInfo("Europe/Warsaw")
         )
       except Exception:
         dt = None
+    else:
+      dt = None
 
-    if dt and dt >= teraz:
-      nr = wyciągnij_numer_kolejki(m.get("kolejka"))
-      if nr not in kolejki_przyszle:
-        kolejki_przyszle[nr] = []
-      kolejki_przyszle[nr].append(dt)
+    if nr not in kolejki_dict:
+      kolejki_dict[nr] = []
+    if dt:
+      kolejki_dict[nr].append(dt)
 
-  if kolejki_przyszle:
-    najblizszy_nr = min(
-        kolejki_przyszle.keys(), key=lambda k: min(kolejki_przyszle[k])
-    )
-    return str(najblizszy_nr)
+  posortowane_nry = sorted(kolejki_dict.keys())
 
-  wszystkie_nry = [
-      wyciągnij_numer_kolejki(m.get("kolejka")) for m in wszystkie_mecze
-  ]
-  return str(max(wszystkie_nry)) if wszystkie_nry else "1"
+  for nr in posortowane_nry:
+    daty = kolejki_dict[nr]
+    if daty:
+      max_data = max(daty)
+      if teraz < max_data:
+        return str(nr)
+
+  return str(posortowane_nry[-1]) if posortowane_nry else "1"
 
 
 def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a):
-  if (
-      typ_h is None
-      or typ_a is None
-      or wynik_h is None
-      or wynik_a is None
-  ):
-    return 0
+  if wynik_h is None or wynik_a is None:
+    return 0, False
 
   try:
     typ_h, typ_a = int(typ_h), int(typ_a)
     wynik_h, wynik_a = int(wynik_h), int(wynik_a)
   except (ValueError, TypeError):
-    return 0
+    return 0, False
 
-  # 1. Dokładny wynik -> 3 pkt
+  # Trafienie dokładnego wyniku -> 3 pkt
   if typ_h == wynik_h and typ_a == wynik_a:
-    return 3
+    return 3, True
 
-  # 2. Trafione rozstrzygnięcie (1X2) -> 1 pkt
+  # Trafienie rozstrzygnięcia (1X2) -> 1 pkt
   roznica_typ = typ_h - typ_a
   roznica_wynik = wynik_h - wynik_a
 
@@ -85,9 +81,9 @@ def oblicz_punkty_za_mecz(typ_h, typ_a, wynik_h, wynik_a):
       or (roznica_typ < 0 and roznica_wynik < 0)
       or (roznica_typ == 0 and roznica_wynik == 0)
   ):
-    return 1
+    return 1, False
 
-  return 0
+  return 0, False
 
 
 def render_ranking(wszystkie_mecze):
@@ -119,12 +115,20 @@ def render_ranking(wszystkie_mecze):
     nick = t.get("gracz_nick")
     mecz_id = t.get("mecz_id")
 
-    if nick not in statystyki:
-      continue
+    # Dopasowanie imienia/nicku
+    dopasowany_nick = None
+    if nick in statystyki:
+      dopasowany_nick = nick
+    else:
+      for g in gracze:
+        if g.lower() in str(nick).lower() or str(nick).lower() in g.lower():
+          dopasowany_nick = g
+          break
 
-    if mecz_id in mapa_meczow:
+    if dopasowany_nick and mecz_id in mapa_meczow:
       mecz = mapa_meczow[mecz_id]
 
+      # BLOKADA: Liczymy punkty TYLKO dla meczów o statusie 'FT' (Finished)
       status_meczu = str(mecz.get("status", "")).upper()
       if status_meczu != "FT":
         continue
@@ -133,6 +137,7 @@ def render_ranking(wszystkie_mecze):
       gole_a = mecz.get("gole_goscie")
       wynik_str = str(mecz.get("wynik", ""))
 
+      # Awaryjne wyciąganie goli z tekstu np. "2 - 1" jeśli kolumny int są puste
       if (gole_h is None or gole_a is None) and ":" in wynik_str:
         parts = wynik_str.split(":")
         try:
@@ -142,20 +147,21 @@ def render_ranking(wszystkie_mecze):
           pass
 
       if gole_h is not None and gole_a is not None:
-        pts = oblicz_punkty_za_mecz(
+        pts, dokladny = oblicz_punkty_za_mecz(
             t.get("typ_gospodarze"),
             t.get("typ_goscie"),
             gole_h,
             gole_a,
         )
 
-        statystyki[nick]["Mecze"] += 1
-        statystyki[nick]["Punkty"] += pts
+        if pts > 0:
+          statystyki[dopasowany_nick]["Punkty"] += pts
+          statystyki[dopasowany_nick]["Mecze"] += 1
 
-        if pts == 3:
-          statystyki[nick]["Dokładne"] += 1
-        elif pts == 1:
-          statystyki[nick]["Trafione"] += 1
+          if pts == 3:
+            statystyki[dopasowany_nick]["Dokładne"] += 1
+          elif pts == 1:
+            statystyki[dopasowany_nick]["Trafione"] += 1
 
   df = pd.DataFrame(list(statystyki.values()))
   df = df.sort_values(
@@ -292,7 +298,7 @@ def render_ranking(wszystkie_mecze):
       f'<div class="tv-header"><div><div class="tv-logo-sub">PKO BANK'
       ' POLSKI</div><div class="tv-logo-title">⚽'
       f' EKSTRAKLAPA</div></div><div class="tv-round-badge">{aktualna_kolejka_nr}.'
-      ' KOLEJKA</div></div>'
+      " KOLEJKA</div></div>"
   )
 
   html_rows = []
