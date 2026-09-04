@@ -125,7 +125,6 @@ def pobierz_typy_gracza(nick):
 
 
 def pobierz_wszystkie_typy():
-  """Pobiera WSZYSTKIE typy z bazy danych przy użyciu automatycznego stronicowania (pagination)."""
   wszystkie_typy = []
   krok = 1000
   od = 0
@@ -168,7 +167,10 @@ def zapisz_typy_gracza(lista_typow):
     })
 
   try:
-    db.table("typy").upsert(rekordy).execute()
+    # NAPRAWIONO: Dodano parametr on_conflict wskazujący unikalną parę (gracz_nick, mecz_id)
+    db.table("typy").upsert(
+        rekordy, on_conflict="gracz_nick, mecz_id"
+    ).execute()
     return True
   except Exception as e:
     st.error(f"Błąd zapisu typów: {str(e)}")
